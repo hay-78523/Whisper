@@ -1,0 +1,3 @@
+@echo off
+echo Dang dong goi phan mem...
+python export_for_client.py

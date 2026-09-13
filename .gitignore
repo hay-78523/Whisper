@@ -1,0 +1,14 @@
+users.json
+transcripts/
+__pycache__/
+*.pyc
+*.zip
+*.pt
+*.exe
+venv/
+f5env/
+scratch/
+test_env/
+data/f5_vi/
+data/voice_profiles/
+.DS_Store

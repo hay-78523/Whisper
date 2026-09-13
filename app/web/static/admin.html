@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quản trị — Whisper STT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=Prata&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="admin-header">
+    <div class="admin-title">
+      <h1>Dashboard Quản trị</h1>
+      <div class="sub">Quản lý hệ thống Whisper STT, models & jobs</div>
+    </div>
+    <div class="admin-actions">
+      <a href="/" class="btn-nav">← Về trang chính</a>
+      <a href="#" id="logout" class="btn-nav">Đăng xuất</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Trạng thái server</h2>
+    <div class="chips" id="statuschips">Đang tải…</div>
+  </div>
+
+  <div class="card">
+    <h2>Model Whisper</h2>
+    <table>
+      <thead><tr><th>Model</th><th>Trên đĩa</th><th>Trong RAM</th><th></th></tr></thead>
+      <tbody id="models"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Tài khoản</h2>
+    <table>
+      <thead><tr><th>Tên đăng nhập</th><th>Vai trò</th><th></th></tr></thead>
+      <tbody id="users"></tbody>
+    </table>
+    <div class="formrow">
+      <input id="nu_name" class="inp" placeholder="tên đăng nhập" style="width:150px">
+      <input id="nu_pass" class="inp" type="password" placeholder="mật khẩu" style="width:130px">
+      <select id="nu_role" class="inp">
+        <option value="user">user</option>
+        <option value="admin">admin</option>
+      </select>
+      <button class="btn" id="nu_add">Tạo tài khoản</button>
+      <span id="nu_msg" class="muted" style="font-size:12px"></span>
+    </div>
+  </div>
+
+  <div class="card" id="clonecard" style="display:none">
+    <h2>Giọng nhân bản (Voice Cloning)</h2>
+    <table>
+      <thead><tr><th>Tên giọng</th><th></th></tr></thead>
+      <tbody id="clones"><tr><td colspan="2" class="muted">Chưa có giọng nào.</td></tr></tbody>
+    </table>
+    <div class="formrow">
+      <input id="cl_name" class="inp" placeholder="tên (bỏ trống tự lấy tên file)" style="width:200px">
+      <input id="cl_file" class="inp" type="file" accept="audio/*,video/*" multiple style="width:200px">
+      <button class="btn" id="cl_add">Tạo giọng</button>
+      <span id="cl_msg" class="muted" style="font-size:12px"></span>
+    </div>
+    <input id="cl_text" class="inp" placeholder="transcript (bỏ trống = tự động nghe & lấy script)" style="width:100%;margin-top:8px">
+    <div class="muted" style="font-size:12px;margin-top:8px">
+      Mẫu 5–15 giây, nghe rõ, không nhạc nền. Chỉ clone giọng CỦA BẠN hoặc người đã đồng ý;
+      model phi thương mại (CC-BY-NC-SA); nên ghi rõ audio do AI tạo khi đăng công khai.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Job gần đây</h2>
+    <table>
+      <thead><tr><th>#</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th><th>Tiến độ</th><th>Thời gian</th><th></th></tr></thead>
+      <tbody id="jobs"><tr><td colspan="7" class="muted">Chưa có job nào.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  var KIND = { prepare: 'Phiên âm + dịch', render: 'Tạo giọng + ghép', preload: 'Nạp model' };
+
+  function guard(r) {
+    if (r.status === 401 || r.status === 403) { location.href = '/login'; throw new Error('auth'); }
+    return r;
+  }
+
+  document.getElementById('logout').addEventListener('click', function (e) {
+    e.preventDefault();
+    fetch('/api/logout', { method: 'POST' }).then(function () {
+      location.href = '/login';
+    });
+  });
+
+  var myName = '';
+
+  function loadUsers() {
+    fetch('/api/admin/users').then(guard).then(function (r) { return r.json(); }).then(function (d) {
+      var tb = document.getElementById('users');
+      tb.innerHTML = '';
+      d.users.forEach(function (u) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td><b>' + esc(u.username) + '</b>' +
+          (u.username === myName ? ' <span class="muted" style="font-size:11px">(bạn)</span>' : '') +
+          '</td><td>' + (u.role === 'admin' ? 'admin' : 'user') + '</td><td></td>';
+        var del = document.createElement('button');
+        del.className = 'btn';
+        del.textContent = 'Xóa';
+        if (u.username === myName) {
+          del.disabled = true;
+          del.title = 'Không thể tự xóa tài khoản đang đăng nhập';
+        }
+        // xac nhan 2 lan bam ngay tren nut (khong dung popup confirm — nhieu
+        // trinh duyet/khung nhung chan popup lam nut bam khong co tac dung)
+        var timer = null;
+        del.addEventListener('click', function () {
+          if (del.dataset.arm !== '1') {
+            del.dataset.arm = '1';
+            del.textContent = 'Chắc chắn xóa?';
+            del.style.borderColor = 'var(--err)';
+            del.style.color = 'var(--err)';
+            timer = setTimeout(function () {
+              del.dataset.arm = '';
+              del.textContent = 'Xóa';
+              del.style.borderColor = '';
+              del.style.color = '';
+            }, 3000);
+            return;
+          }
+          clearTimeout(timer);
+          del.disabled = true;
+          fetch('/api/admin/user_delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u.username })
+          }).then(function (r) { return r.json(); })
+            .then(function (j) {
+              document.getElementById('nu_msg').textContent =
+                j.ok ? 'Đã xóa "' + u.username + '".' : (j.error || 'Lỗi không rõ');
+              loadUsers();
+            })
+            .catch(function () {
+              document.getElementById('nu_msg').textContent = 'Mất kết nối — thử lại.';
+              del.disabled = false;
+            });
+        });
+        tr.lastChild.appendChild(del);
+        tb.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  document.getElementById('nu_add').addEventListener('click', function () {
+    var msg = document.getElementById('nu_msg');
+    fetch('/api/admin/user_add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('nu_name').value,
+        password: document.getElementById('nu_pass').value,
+        role: document.getElementById('nu_role').value
+      })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        msg.textContent = res.ok ? 'Đã tạo.' : (res.j.error || 'Lỗi');
+        if (res.ok) {
+          document.getElementById('nu_name').value = '';
+          document.getElementById('nu_pass').value = '';
+          loadUsers();
+        }
+      });
+  });
+
+  function esc(s) {
+    return (s + '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function fmtUptime(s) {
+    if (s < 60) return s + ' giây';
+    if (s < 3600) return Math.floor(s / 60) + ' phút';
+    return Math.floor(s / 3600) + ' giờ ' + Math.floor(s % 3600 / 60) + ' phút';
+  }
+  function fmtDur(s) {
+    return s < 60 ? s.toFixed(0) + 's' : Math.floor(s / 60) + 'm' + Math.round(s % 60) + 's';
+  }
+
+  function loadStatus() {
+    fetch('/api/admin/status').then(guard).then(function (r) { return r.json(); }).then(function (s) {
+      document.getElementById('statuschips').innerHTML = [
+        'Phiên bản ' + s.version,
+        'Uptime ' + fmtUptime(s.uptime),
+        'Model mặc định: ' + s.default_model,
+        'Job: ' + s.jobs.running + ' đang chạy · ' + s.jobs.done + ' xong · ' + s.jobs.error + ' lỗi',
+      ].map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('');
+
+      var tb = document.getElementById('models');
+      tb.innerHTML = '';
+      s.models.forEach(function (m) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><b>' + esc(m.name) + '</b></td>' +
+          '<td>' + (m.downloaded ? 'đã tải' : '<span class="muted">chưa tải</span>') + '</td>' +
+          '<td>' + (m.loaded ? 'đã nạp' : '<span class="muted">—</span>') + '</td>' +
+          '<td></td>';
+        if (!m.loaded) {
+          var b = document.createElement('button');
+          b.className = 'btn';
+          b.textContent = m.downloaded ? 'Nạp vào RAM' : 'Tải + nạp';
+          b.addEventListener('click', function () {
+            b.disabled = true; b.textContent = 'Đang nạp…';
+            fetch('/api/admin/preload', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: m.name })
+            });
+          });
+          tr.lastChild.appendChild(b);
+        }
+        tb.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  function loadJobs() {
+    fetch('/api/admin/jobs').then(guard).then(function (r) { return r.json(); }).then(function (d) {
+      var tb = document.getElementById('jobs');
+      if (!d.jobs.length) {
+        tb.innerHTML = '<tr><td colspan="7" class="muted">Chưa có job nào.</td></tr>';
+        return;
+      }
+      tb.innerHTML = '';
+      d.jobs.forEach(function (j) {
+        var pct = j.total > 0 ? Math.min(100, 100 * j.done / j.total) : (j.state === 'done' ? 100 : 0);
+        var prog = j.state === 'running'
+          ? '<div class="bar"><i style="width:' + pct + '%"></i></div><span class="muted">' +
+            esc(j.phase) + ' ' + j.done + '/' + (j.total || '…') + '</span>'
+          : (j.state === 'error' ? '<span class="muted" title="' + esc(j.error || '') + '">' +
+             esc((j.error || '').slice(0, 40)) + '…</span>' : '100%');
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + j.id + '</td>' +
+          '<td>' + (KIND[j.kind] || esc(j.kind)) + '</td>' +
+          '<td title="' + esc(j.label) + '">' + esc((j.label || '').slice(0, 40)) + '</td>' +
+          '<td class="st-' + j.state + '">' + j.state + '</td>' +
+          '<td>' + prog + '</td>' +
+          '<td>' + fmtDur(j.elapsed) + '</td>' +
+          '<td></td>';
+        var cell = tr.lastChild;
+        if (j.audio_kb > 0) {
+          cell.innerHTML = '<a class="audio" href="/api/audio?id=' + j.id +
+            '" target="_blank">Nghe · ' + j.audio_kb + 'KB</a> ';
+        }
+        var del = document.createElement('button');
+        del.className = 'btn';
+        del.textContent = 'Xóa';
+        del.disabled = j.state === 'running';
+        del.addEventListener('click', function () {
+          fetch('/api/admin/job_delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: j.id })
+          }).then(loadJobs);
+        });
+        cell.appendChild(del);
+        tb.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  function loadClones() {
+    fetch('/api/admin/clones').then(guard).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.available) return;                    // chua cai engine -> an ca card
+      document.getElementById('clonecard').style.display = 'block';
+      var tb = document.getElementById('clones');
+      if (!d.profiles.length) {
+        tb.innerHTML = '<tr><td colspan="2" class="muted">Chưa có giọng nào.</td></tr>';
+        return;
+      }
+      tb.innerHTML = '';
+      d.profiles.forEach(function (p) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td><b>🎤 ' + esc(p) + '</b></td><td></td>';
+        var playBtn = document.createElement('a');
+        playBtn.className = 'btn audio';
+        playBtn.style.marginRight = '8px';
+        playBtn.href = '/api/clone_test_audio?name=' + encodeURIComponent(p);
+        playBtn.target = '_blank';
+        playBtn.textContent = 'Nghe thử';
+        tr.lastChild.appendChild(playBtn);
+        var del = document.createElement('button');
+        del.className = 'btn';
+        del.textContent = 'Xóa';
+        var timer = null;
+        del.addEventListener('click', function () {
+          if (del.dataset.arm !== '1') {
+            del.dataset.arm = '1'; del.textContent = 'Chắc chắn xóa?';
+            del.style.color = 'var(--err)'; del.style.borderColor = 'var(--err)';
+            timer = setTimeout(function () {
+              del.dataset.arm = ''; del.textContent = 'Xóa';
+              del.style.color = ''; del.style.borderColor = '';
+            }, 3000);
+            return;
+          }
+          clearTimeout(timer);
+          fetch('/api/admin/clone_delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: p })
+          }).then(function () { loadClones(); });
+        });
+        tr.lastChild.appendChild(del);
+        tb.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  document.getElementById('cl_add').addEventListener('click', function () {
+    var msg = document.getElementById('cl_msg');
+    var files = document.getElementById('cl_file').files;
+    var baseName = document.getElementById('cl_name').value.trim();
+    var text = document.getElementById('cl_text').value.trim();
+    if (!files.length) {
+      msg.textContent = 'Cần chọn file mẫu âm thanh (có thể chọn nhiều).';
+      return;
+    }
+    
+    // Lưu lại script để lần sau tự động có sẵn không cần gõ lại
+    if (text) {
+      localStorage.setItem('default_clone_script', text);
+    }
+    
+    var btn = document.getElementById('cl_add');
+    btn.disabled = true;
+    var i = 0;
+    var errors = [];
+    
+    function uploadNext() {
+      if (i >= files.length) {
+        msg.textContent = errors.length ? 'Có lỗi: ' + errors.join(', ') : 'Đã tạo ' + files.length + ' giọng thành công!';
+        btn.disabled = false;
+        loadClones();
+        return;
+      }
+      
+      var f = files[i];
+      // Tự lấy tên file làm tên giọng nếu bỏ trống, hoặc nếu chọn nhiều file thì bắt buộc lấy tên file để tránh trùng
+      var vname = (files.length === 1 && baseName) ? baseName : f.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+      if (vname.length < 2) vname = vname + "_voice";
+      vname = vname.slice(0, 24);
+      
+      msg.textContent = 'Đang xử lý mẫu ' + (i + 1) + '/' + files.length + ' (' + vname + ')…';
+      
+      fetch('/api/admin/clone_add?name=' + encodeURIComponent(vname) +
+            '&ref_text=' + encodeURIComponent(text), { method: 'POST', body: f })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) errors.push(vname + ': ' + (res.j.error || 'Lỗi'));
+          i++;
+          uploadNext();
+        })
+        .catch(function () {
+          errors.push(vname + ': Mạng lỗi');
+          i++;
+          uploadNext();
+        });
+    }
+    
+    uploadNext();
+  });
+
+  // Tự động tải lại script cũ nếu có
+  var savedScript = localStorage.getItem('default_clone_script');
+  if (savedScript) {
+    document.getElementById('cl_text').value = savedScript;
+  }
+
+  loadStatus(); loadJobs(); loadClones();
+  fetch('/api/me').then(function (r) { return r.json(); })
+    .then(function (m) { myName = m.user; })
+    .catch(function () {})
+    .then(loadUsers);
+  setInterval(loadStatus, 4000);
+  setInterval(loadJobs, 2000);
+})();
+</script>
+</body>
+</html>

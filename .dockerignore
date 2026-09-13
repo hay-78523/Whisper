@@ -1,0 +1,5 @@
+users.json
+transcripts/
+__pycache__/
+*.pyc
+.gitignore

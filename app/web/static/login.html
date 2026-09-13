@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đăng nhập — Whisper STT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=Prata&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body id="splash-overlay" style="background-image: radial-gradient(circle at top right, rgba(212, 175, 55, 0.15), transparent 50%), radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.9), transparent 50%);">
+<div class="splash-content">
+  <div class="splash-title">Whisper Studio</div>
+  <div class="splash-login">
+    <div style="font-size:14px; color:var(--muted); margin-bottom: 24px; font-weight: 500;">Đăng nhập để dùng công cụ phiên âm &amp; lồng tiếng</div>
+    <form id="form">
+      <input type="text" id="username" placeholder="Tên đăng nhập" autocomplete="username" autofocus>
+      <input type="password" id="password" placeholder="Mật khẩu" autocomplete="current-password">
+      <button id="go" type="submit">Đăng nhập</button>
+      <div id="error" style="margin-top:16px; color:var(--err); font-size:14px; font-weight:600; display:none;"></div>
+    </form>
+  </div>
+</div>
+<script>
+document.getElementById('form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var btn = document.getElementById('go');
+  var err = document.getElementById('error');
+  btn.disabled = true;
+  err.style.display = 'none';
+  fetch('/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('username').value,
+      password: document.getElementById('password').value
+    })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.j.error || 'Đăng nhập thất bại');
+      location.href = '/';
+    })
+    .catch(function (e2) {
+      btn.disabled = false;
+      err.textContent = '❌ ' + e2.message;
+      err.style.display = 'block';
+    });
+});
+</script>
+</body>
+</html>
