@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from ..config import JOB_KEEP
-from . import engine, translate, tts, video
+from . import clone, engine, translate, tts, video
 
 
 class JobManager(object):
@@ -82,6 +82,7 @@ class JobManager(object):
                 "created": job["created"], "elapsed": round(end - job["created"], 1),
                 "error": job["error"],
                 "audio_kb": len(job["audio"]) // 1024 if job.get("audio") else 0,
+                "log": job.get("log"),
             })
         return out
 
@@ -347,6 +348,61 @@ class JobManager(object):
                 self._finish(job)
             except Exception as e:
                 self._finish(job, "Loi bien kich: %s" % e)
+
+        threading.Thread(target=work, daemon=True).start()
+        return job
+
+    def start_clone_setup(self, force=False):
+        """Tai model + vocab cho Voice Clone (co resume, tu kiem tra file)."""
+        job = self._new("clone_setup", "tải model giọng nhân bản")
+        lines = []
+
+        def work():
+            try:
+                self._set_phase(job, "download")
+                clone.ensure_assets(
+                    progress=lambda d, t: job.update(done=d, total=t),
+                    log=lambda m: (lines.append(m), job.update(log=lines[-6:])),
+                    force=force)
+                job["result"] = {"assets": clone.clone_assets.state()}
+                self._finish(job)
+            except Exception as e:
+                self._finish(job, "Tai model nhan ban giong loi: %s" % e)
+
+        threading.Thread(target=work, daemon=True).start()
+        return job
+
+    def start_clone_warm(self):
+        """Nap san engine nhan ban giong vao RAM (lan long tieng dau se nhanh hon)."""
+        job = self._new("clone_warm", "nạp engine nhân bản giọng")
+
+        def work():
+            try:
+                self._set_phase(job, "model")
+                job["total"] = 1
+                info = clone.warm_up(log=lambda m: job.update(label=m[:60]))
+                job.update(done=1, label="nạp engine nhân bản giọng",
+                           result={"device": info.get("device"), "port": info.get("port")})
+                self._finish(job)
+            except Exception as e:
+                self._finish(job, "Khong nap duoc engine nhan ban giong: %s" % e)
+
+        threading.Thread(target=work, daemon=True).start()
+        return job
+
+    def start_clone_sample(self, name, text=None):
+        """Tao lai file nghe thu cho 1 giong nhan ban."""
+        job = self._new("clone_sample", "nghe thử giọng %s" % name)
+
+        def work():
+            try:
+                self._set_phase(job, "tts")
+                job["total"] = 1
+                clone.make_sample(name, text)
+                job.update(done=1)
+                self._finish(job)
+            except Exception as e:
+                self._finish(job, "Khong tao duoc ban nghe thu: %s" % e)
 
         threading.Thread(target=work, daemon=True).start()
         return job

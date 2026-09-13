@@ -23,6 +23,17 @@ API quan tri:
     POST /api/admin/user_add {username,password,role}
     POST /api/admin/user_delete {username}
     POST /api/admin/user_password {username,password}
+
+API nhan ban giong (Voice Clone — tinh nang chinh):
+    GET  /api/admin/clone_status[?recheck=1]   thieu gi, loi gi, dang chay tren gi
+    POST /api/admin/clone_install {force?}     tai model giong Viet (job nen, co resume)
+    POST /api/admin/clone_warm                 nap san engine vao RAM
+    POST /api/admin/clone_stop                 tat engine, giai phong RAM
+    POST /api/admin/clone_add?name=&ref_text=  (body = file mau) tao giong
+    POST /api/admin/clone_sample {name,text?}  tao ban nghe thu
+    POST /api/admin/clone_delete {name}
+    POST /api/admin/clone_settings {quality,device,normalize,trim,lowercase}
+    GET  /api/clone_test_audio?name=           nghe thu giong da nhan ban
 """
 
 import argparse
@@ -42,6 +53,9 @@ from urllib.parse import parse_qs, urlparse
 from .. import VERSION, config
 from ..core import clone, engine, users
 from ..core.jobs import JobManager
+
+# doc thu giong nhan ban: chi 1 yeu cau mot luc (model giu GPU/CPU rat nang)
+_clone_preview_lock = threading.Lock()
 
 STATIC = Path(__file__).resolve().parent / "static"
 SESSION_COOKIE = "whisper_session"
@@ -179,12 +193,24 @@ class Handler(BaseHTTPRequestHandler):
                 _p = (getattr(config, "PERSONA_VOICES", {}) or {}).get(vid.split(":", 1)[1], {})
                 lang = _p.get("lang", "vi")
             elif vid.startswith("c:"):
-                clone_name = vid.split(":", 1)[1]
-                test_mp3 = DATA / "voice_profiles" / clone_name / "test.mp3"
-                if test_mp3.exists():
-                    self._send(200, test_mp3.read_bytes(), "audio/mpeg")
+                # giong nhan ban: dung ban nghe thu da co; chua co thi doc 1 cau
+                # mau ngay (giu khoa de nhieu cu bam khong chay song song lam nghen GPU)
+                cname = clone.safe_name(vid.split(":", 1)[1])
+                pth = clone.sample_path(cname)
+                if not pth:
+                    with _clone_preview_lock:
+                        pth = clone.sample_path(cname)
+                        if not pth:
+                            try:
+                                clone.make_sample(cname)
+                            except Exception as e:
+                                return self._send(503, {"error": str(e)})
+                            pth = clone.sample_path(cname)
+                if pth:
+                    self._send(200, pth.read_bytes(),
+                               "audio/wav" if pth.suffix == ".wav" else "audio/mpeg")
                     return
-                lang = "en"
+                lang = "vi"
 
             text = self._PREVIEW_TEXTS.get(lang, self._PREVIEW_TEXTS["vi"])
             data, mime, ext = tts.synth(text, vid, "+0%")
@@ -261,14 +287,22 @@ class Handler(BaseHTTPRequestHandler):
                     return "Online"
 
                 groups = []
-                if clone.available():
+                clone_profiles = clone.list_profiles()
+                if clone_profiles:
                     clone_voices = []
-                    for p in clone.list_profiles():
-                        # Giong clone goc
-                        clone_voices.append({"id": "c:" + p, "label": p + " — giọng clone",
-                                           "name": p, "style": "giọng nhân bản", "engine": "Clone"})
-                    
-                    groups.append({"label": "Giọng của bạn · nhân bản", "voices": clone_voices})
+                    for name in clone_profiles:
+                        inf = clone.profile_info(name)
+                        note = "giọng nhân bản"
+                        if inf["state"] == "processing":
+                            note += " · đang chuẩn bị mẫu"
+                        elif inf["duration"]:
+                            note += " · mẫu %.0fs" % inf["duration"]
+                        clone_voices.append({"id": "c:" + name,
+                                             "label": name + " — giọng clone",
+                                             "name": name, "style": note,
+                                             "engine": "Clone"})
+                    groups.append({"label": "Giọng của bạn · nhân bản",
+                                   "voices": clone_voices})
                 if vn_ok and vn.list_custom():
                     groups.append({"label": "Giọng đúc riêng",
                                    "voices": [{"id": v, "label": d,
@@ -390,20 +424,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"users": users.list_users()})
         elif route == "/api/admin/clones":
             if self._require("admin"):
-                self._send(200, {"available": clone.available(),
-                                 "profiles": clone.list_profiles() if clone.available() else []})
+                # giu nguyen 2 khoa cu cho tuong thich, them trang thai day du
+                st = clone.status()
+                self._send(200, {"available": st["ready"],
+                                 "profiles": [p["name"] for p in st["profiles"]],
+                                 "status": st})
+        elif route == "/api/admin/clone_status":
+            if self._require("admin"):
+                qs = parse_qs(parsed.query)
+                recheck = (qs.get("recheck", ["0"])[0] == "1")
+                self._send(200, clone.status(recheck=recheck))
         elif route == "/api/clone_test_audio":
             qs = parse_qs(parsed.query)
-            name = qs.get("name", [""])[0]
-            p = clone.CLONE_DIR / name / "test.mp3"
-            if p.exists():
+            name = clone.safe_name(qs.get("name", [""])[0])
+            p = clone.sample_path(name)
+            if p:
+                mime = "audio/wav" if p.suffix == ".wav" else "audio/mpeg"
                 self.send_response(200)
-                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Type", mime)
                 self.send_header("Content-Length", str(p.stat().st_size))
+                self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(p.read_bytes())
             else:
-                self._send(404, {"error": "not found"})
+                self._send(404, {"error": "Chưa có bản nghe thử — bấm \"Nghe thử\" "
+                                          "để tool đọc một câu mẫu."})
         else:
             self._send(404, {"error": "not found"})
 
@@ -468,17 +513,44 @@ class Handler(BaseHTTPRequestHandler):
                     qs = parse_qs(urlparse(self.path).query)
                     name = (qs.get("name") or [""])[0]
                     ref_text = (qs.get("ref_text") or [""])[0]
+                    fname = (qs.get("filename") or [""])[0]
                     tmp, _ = self._read_body_to_temp("ref_sample")
                     try:
                         audio = Path(tmp).read_bytes()
                     finally:
                         os.unlink(tmp)
-                    clone.add_profile(name, audio, ref_text)
-                    self._send(200, {"ok": True})
+                    info = clone.add_profile(name, audio, ref_text, filename=fname)
+                    self._send(200, {"ok": True, "profile": info})
             elif route == "/api/admin/clone_delete":
                 if self._require("admin"):
                     clone.delete_profile(str(self._json_body().get("name", "")))
                     self._send(200, {"ok": True})
+            elif route == "/api/admin/clone_install":
+                if self._require("admin"):
+                    force = bool(self._json_body().get("force"))
+                    job = jobs.start_clone_setup(force=force)
+                    self._send(200, {"ok": True, "job": job["id"]})
+            elif route == "/api/admin/clone_warm":
+                if self._require("admin"):
+                    job = jobs.start_clone_warm()
+                    self._send(200, {"ok": True, "job": job["id"]})
+            elif route == "/api/admin/clone_stop":
+                if self._require("admin"):
+                    clone.stop_worker()
+                    self._send(200, {"ok": True})
+            elif route == "/api/admin/clone_sample":
+                if self._require("admin"):
+                    p = self._json_body()
+                    name = clone.safe_name(str(p.get("name", "")))
+                    if name not in clone.list_profiles():
+                        raise ValueError("Không có giọng '%s'." % name)
+                    job = jobs.start_clone_sample(name, (p.get("text") or "").strip() or None)
+                    self._send(200, {"ok": True, "job": job["id"]})
+            elif route == "/api/admin/clone_settings":
+                if self._require("admin"):
+                    self._send(200, {"ok": True,
+                                     "settings": clone.set_settings(self._json_body()),
+                                     "nfe_step": clone.nfe_step()})
             else:
                 self._send(404, {"error": "not found"})
         except ValueError as e:

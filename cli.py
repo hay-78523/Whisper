@@ -8,6 +8,14 @@
     python3 cli.py dub --text "Xin chào" -o chao.mp3
     python3 cli.py dub --file transcript.txt --voice edge:ja-JP-NanamiNeural -o ja.mp3
     python3 cli.py voices
+
+Nhan ban giong (tinh nang chinh — cai: python3 setup_clone.py):
+    python3 cli.py clone status
+    python3 cli.py clone add mau_giong.m4a --name dan --text "cau trong mau"
+    python3 cli.py clone list
+    python3 cli.py clone test dan
+    python3 cli.py clone delete dan
+    python3 cli.py dub --text "Xin chào" --voice c:dan -o chao.wav
 """
 
 import argparse
@@ -19,14 +27,82 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app import config
-from app.core import engine, translate, tts
+from app.core import clone, engine, translate, tts
 
 
 def cmd_voices(_args):
+    names = clone.list_profiles()
+    if names:
+        print("Giong nhan ban cua ban:")
+        for n in names:
+            inf = clone.profile_info(n)
+            print("  %-28s mau %s%s" % (
+                "c:" + n,
+                ("%.0fs" % inf["duration"]) if inf["duration"] else "?",
+                (" — " + "; ".join(inf["warnings"])) if inf["warnings"] else ""))
+        print()
     for v, desc in config.COMMON_VOICES:
         print("  %-28s %s" % (v, desc))
     print("\nNgon ngu dich duoc:", ", ".join(config.TRANSLATE_LANGS))
     print("Xem het giong edge: python3 -m edge_tts --list-voices")
+
+
+def cmd_clone(args):
+    act = args.action
+    if act == "status":
+        st = clone.status(recheck=True)
+        for a in st["assets"]:
+            print("  %s %-44s %s" % ("OK " if a["ok"] else "-->", a["label"],
+                                     a["problem"] or "%d MB" % (a["size"] // (1 << 20))))
+        e = st["engine"]
+        print("  %s engine F5-TTS: %s" % ("OK " if e["installed"] else "-->",
+                                          e["python"] or "chua cai"))
+        print("  chat luong: %d buoc | thiet bi: %s"
+              % (st["quality"]["nfe_step"], st["settings"].get("device") or "tu chon"))
+        print("  giong: %s" % (", ".join(p["name"] for p in st["profiles"]) or "(chua co)"))
+        if not st["ready"]:
+            print("\nChua san sang — chay: python3 setup_clone.py")
+        return 0 if st["ready"] else 1
+
+    if act == "list":
+        for n in clone.list_profiles():
+            inf = clone.profile_info(n)
+            print("  c:%-22s %s  script: %s" % (
+                n, ("%.1fs" % inf["duration"]) if inf["duration"] else "?",
+                (inf["ref_text"] or "(chua co)")[:60]))
+        return 0
+
+    if act == "add":
+        if not args.name and not args.file:
+            sys.exit("Can --file (hoac tham so vi tri) cho mau giong.")
+        src = Path(args.file)
+        if not src.is_file():
+            sys.exit("Khong co file: %s" % src)
+        name = args.name or src.stem
+        print("Dang xu ly mau '%s'..." % src.name)
+        inf = clone.add_profile(name, src.read_bytes(), args.text or "",
+                               filename=src.name, background=False)
+        print("Da tao giong c:%s — mau %.1fs%s"
+              % (inf["name"], inf["duration"] or 0,
+                 " (da cat ngan)" if inf["trimmed"] else ""))
+        print("  script mau: %s" % (inf["ref_text"] or "(chua lay duoc)"))
+        for w in inf["warnings"]:
+            print("  luu y: %s" % w)
+        if inf["error"]:
+            print("  loi: %s" % inf["error"])
+        return 0
+
+    if act == "test":
+        out = clone.make_sample(args.file or args.name)
+        print("Da ghi ban nghe thu: %s" % out)
+        clone.stop_worker()
+        return 0
+
+    if act == "delete":
+        target = args.file or args.name
+        print("Da xoa." if clone.delete_profile(target) else "Khong co giong do.")
+        return 0
+    sys.exit("Hanh dong khong hop le: %s" % act)
 
 
 def _collect(target, recursive):
@@ -173,9 +249,16 @@ def main():
     v = sub.add_parser("voices", help="liet ke giong doc co san")
     v.set_defaults(func=cmd_voices)
 
+    c = sub.add_parser("clone", help="nhan ban giong: status / add / list / test / delete")
+    c.add_argument("action", choices=["status", "add", "list", "test", "delete"])
+    c.add_argument("file", nargs="?", help="file mau (add) hoac ten giong (test/delete)")
+    c.add_argument("--name", help="ten giong (mac dinh: lay ten file)")
+    c.add_argument("--text", help="script cua mau (bo trong = tool tu nghe)")
+    c.set_defaults(func=cmd_clone)
+
     args = ap.parse_args()
-    args.func(args)
+    return args.func(args) or 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
