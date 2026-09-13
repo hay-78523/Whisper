@@ -10,11 +10,14 @@ pinned: false
 
 # whisper_stt — Phiên âm, dịch & lồng tiếng audio. Miễn phí, chạy trên máy.
 
-Đưa audio/video vào → **transcript** (`.txt`/`.srt`/`.json`) → **dịch** sang 8 thứ tiếng → **lồng tiếng** bằng giọng neural bản xứ. Không API key, không tốn phí:
+Đưa audio/video vào → **transcript** (`.txt`/`.srt`/`.json`) → **dịch** sang 8 thứ tiếng → **lồng tiếng** bằng **giọng của chính bạn** (voice clone) hoặc giọng neural bản xứ. Không API key, không tốn phí:
 
+- 🎤 **Nhân bản giọng (F5-TTS)** — *tính năng chính*: 6–12 giây mẫu là có giọng của bạn,
+  chạy hẳn trên máy, không giới hạn. Cài 1 lệnh: `python3 setup_clone.py`
+  ([xem mục Voice Cloning](#-voice-cloning--nhân-bản-giọng-tính-năng-chính))
 - Phiên âm: **Whisper** (`faster-whisper`, chạy local, batched + VAD + đa luồng CPU)
-- Dịch: Google Translate (miễn phí, cần mạng)
-- Giọng đọc: **edge-tts** (neural, cần mạng) hoặc `say:Linh` (offline macOS)
+- Dịch: Google Translate (miễn phí, cần mạng) hoặc AI (Gemini/Groq/Ollama)
+- Giọng đọc khác: **edge-tts** (neural, cần mạng), VieNeu (local), `say:Linh` (offline macOS)
 
 ## Cấu trúc
 
@@ -22,13 +25,18 @@ pinned: false
 whisper_stt/
 ├── run.py              # khởi động web server
 ├── cli.py              # CLI: transcribe / dub / voices
+├── setup_clone.py      # 🎤 cài Voice Clone bằng 1 lệnh (engine + model, có resume)
 ├── requirements.txt
 ├── users.json          # tài khoản (tự tạo lần đầu, KHÔNG commit — đã gitignore)
+├── data/               # model clone, giọng mẫu, log (đã gitignore)
 └── app/
-    ├── config.py       # MỌI cấu hình nằm ở đây (cổng, model, giọng, giới hạn)
+    ├── config.py       # MỌI cấu hình nằm ở đây (cổng, model, giọng, CLONE_*)
     ├── core/           # tầng lõi — business logic, không dính web
     │   ├── engine.py      # Whisper: nạp model, phiên âm, SRT
     │   ├── tts.py         # tạo giọng đọc (edge / say), cắt khúc + song song
+    │   ├── clone.py       # 🎤 nhân bản giọng: giọng mẫu, hậu kỳ, điều phối worker
+    │   ├── clone_worker.py# 🎤 tiến trình riêng giữ model F5-TTS (sập không chết web)
+    │   ├── clone_assets.py# 🎤 tải model: resume + kiểm tra nội dung + mirror
     │   ├── translate.py   # dịch máy theo khúc
     │   ├── users.py       # tài khoản: PBKDF2, vai trò user/admin
     │   └── jobs.py        # JobManager: job nền + tiến độ + dọn dẹp
@@ -128,29 +136,72 @@ nguồn kế, không phải làm gì cả. Kích hoạt nguồn dự phòng (ch�
 Riêng **giọng đọc Gemini TTS** (nhóm ⭐) là dịch vụ riêng chỉ Gemini có — hết
 quota thì đợi reset (nửa đêm giờ Mỹ) hoặc thêm key vào `GEMINI_API_KEYS`.
 
-## Voice Cloning — nhân bản giọng (tùy chọn, chạy local, miễn phí)
+## 🎤 Voice Cloning — nhân bản giọng (tính năng chính)
 
-Trang /admin sẽ hiện mục **Giọng nhân bản** khi máy đã cài engine. Tải lên mẫu giọng
-5–15 giây + gõ transcript của mẫu → giọng `🎤 tên` xuất hiện trong mọi dropdown giọng đọc
-(đọc văn bản + lồng video). Cài engine (1 lần, ~7GB, cần Python ≥3.10):
+Tải lên **6–12 giây** giọng của bạn → giọng `🎤 tên` xuất hiện trong mọi dropdown giọng đọc
+(đọc văn bản, lồng tiếng video). Chạy **hoàn toàn trên máy**, không key, không phí, không giới hạn.
+
+### Cài đặt: một lệnh
 
 ```bash
-# macOS (Windows tương tự với py -3.12 -m venv)
-brew install python@3.12 ffmpeg
-python3.12 -m venv "$HOME/Library/Application Support/whisper_stt/f5env"
-"$HOME/Library/Application Support/whisper_stt/f5env/bin/pip" install f5-tts
-# tải model tiếng Việt (ViVoice 1000h):
-D="$HOME/Library/Application Support/whisper_stt/f5_vi"; mkdir -p "$D"
-curl -L -o "$D/vocab.txt" https://huggingface.co/hynt/F5-TTS-Vietnamese-ViVoice/resolve/main/config.json
-curl -L -o "$D/model.pt"  https://huggingface.co/hynt/F5-TTS-Vietnamese-ViVoice/resolve/main/model_last.pt
+python3 setup_clone.py          # cài engine + tải model giọng Việt
+python3 setup_clone.py --check  # xem đang thiếu gì (không tải gì cả)
 ```
 
-Tốc độ: ~6x chậm hơn thời gian thực (video 20 phút ≈ 1,5–2 giờ) — hợp văn bản ngắn/intro;
-video dài nên dùng giọng edge. **Điều khoản**: model CC-BY-NC-SA (phi thương mại), chỉ clone
-giọng của mình/người đã đồng ý, ghi rõ audio do AI tạo khi đăng công khai.
+Trên Windows/macOS chỉ cần chạy `Start-Windows.bat` / `Start-Mac.command` như bình thường —
+lần đầu nó tự gọi lệnh trên. Lệnh này:
+
+- tự chọn **PyTorch CUDA / CPU / MPS** đúng với máy (thử thật trước khi chốt, card NVIDIA
+  không tương thích thì tự hạ về bản CPU thay vì để lỗi khi dùng);
+- tải model `data/f5_vi/` có **resume** — mạng đứt thì chạy lại là tiếp tục từ chỗ đang dở,
+  không tải lại 1,3GB từ đầu;
+- **kiểm tra nội dung từng file** sau khi tải (model phải là checkpoint PyTorch thật, vocab
+  phải là bảng ký tự thật), sai thì tự chuyển sang mirror `hf-mirror.com` — không còn cảnh
+  "tải xong mà dùng thì lỗi";
+- chạy lại bao nhiêu lần cũng được, phần nào xong rồi thì bỏ qua.
+
+Không có dòng lệnh? Vào **/admin → khối 🎤 Giọng nhân bản** bấm **"Tải model giọng Việt"**:
+bảng ở đó nói rõ thiếu gì, tải tới đâu, engine đang chạy trên GPU hay CPU.
+
+### Dùng
+
+1. **/admin → Giọng nhân bản → Tạo giọng**: chọn file mẫu (nhiều file một lúc cũng được).
+   Script mẫu bỏ trống thì tool **tự nghe rồi ghi lại** bằng Whisper — khỏi gõ.
+2. Bấm **Đọc thử 1 câu** để nghe ngay giọng vừa nhân bản trước khi đem đi lồng cả video.
+3. Ra trang chính, chọn giọng `🎤 tên` như mọi giọng khác.
+
+### Để giọng nghe hay
+
+| Việc | Tool tự làm |
+|---|---|
+| Mẫu lẫn nhạc nền / dài 2 phút | Cắt còn 12 giây, bỏ im lặng, lọc rumble, chuẩn 24kHz mono |
+| Script mẫu không khớp audio (nguyên nhân số 1 làm giọng nhòe) | Mẫu bị cắt là tự nghe lại cho khớp đúng đoạn được dùng |
+| Đoạn to đoạn nhỏ, lạo xạo chỗ nối | Cân bằng âm lượng + fade 10ms từng đoạn |
+| Lệch tiếng so với hình | Đoạn trống/đoạn lỗi vẫn giữ đúng vị trí timestamp |
+
+Tinh chỉnh trong **/admin**: chất lượng **nhanh (16 bước) · chuẩn (32) · tối đa (48)**,
+thiết bị chạy (tự chọn / GPU / CPU), bật tắt cân bằng âm lượng và cắt im lặng.
+Muốn sửa sâu hơn: mọi hằng số `CLONE_*` nằm trong `app/config.py`.
+
+### Không còn treo / sập giữa job
+
+- Model sống trong **tiến trình riêng** — nó sập (hết VRAM, driver lỗi) thì server web vẫn
+  sống, tool tự khởi động lại và **đọc lại riêng những đoạn lỗi** (tự hạ xuống CPU).
+- Một đoạn đọc lỗi **không giết cả job** 2 tiếng: chỗ đó giữ im lặng, báo rõ bao nhiêu đoạn
+  hỏng; chỉ dừng hẳn khi lỗi quá 35% số đoạn.
+- Cổng 8081 bị app khác chiếm thì tự nhảy cổng khác. Log: `data/logs/clone_worker.log`.
+- Nút **Nạp sẵn engine** / **Tắt engine** trong /admin để chủ động giữ hay giải phóng RAM.
+
+Tốc độ: ~6x chậm hơn thời gian thực trên CPU (video 20 phút ≈ 1,5–2 giờ), có GPU NVIDIA thì
+nhanh hơn nhiều — video dài mà gấp thì dùng giọng edge. **Điều khoản**: model
+CC-BY-NC-SA (phi thương mại), chỉ clone giọng của mình/người đã đồng ý, ghi rõ audio do AI
+tạo khi đăng công khai.
 
 ## Ghi chú vận hành
 
 - Job giữ trong RAM (tối đa 50 job gần nhất — chỉnh trong `app/config.py`); audio lồng tiếng nằm trong job, xóa job là giải phóng RAM.
 - Transcript rất dài (>60k ký tự) web sẽ từ chối lồng tiếng — dùng CLI.
 - Muốn đổi cổng/giọng/giới hạn mặc định: sửa một chỗ duy nhất `app/config.py`.
+- Voice clone: model ở `data/f5_vi/`, giọng mẫu ở `data/voice_profiles/<tên>/` (mỗi giọng gồm
+  `ref.wav` đã chuẩn hóa, `ref.txt` script mẫu, `meta.json`, `sample.wav` bản nghe thử).
+  Xóa giọng trong /admin là xóa cả thư mục. Log engine: `data/logs/clone_worker.log`.

@@ -29,9 +29,75 @@ MAX_TTS_CHARS = 200000       # ~1 cuon truyen vua / lan long tieng
 MAX_UPLOAD_MB = 2000         # tran dung luong file upload (chong day o dia)
 VIENEU_PRECISION = "fp32"    # chat luong toi da; "int8" = nhanh hon ~1.6x neu may yeu
 import platform
-# tren Mac khong co GPU Nvidia nen chay rat cham, set = 12 de test nhanh.
-# tren Windows co GPU, set = 32 de dat chat luong toi da.
-CLONE_NFE_STEP = 12 if platform.system() == "Darwin" else 32
+
+# =====================================================================
+# VOICE CLONE (F5-TTS) — tinh nang CHINH cua tool
+# ---------------------------------------------------------------------
+# Cai dat 1 lenh:  python3 setup_clone.py        (xem lai:  --check)
+# Moi thu so o day co the tinh chinh ngay tren trang /admin (luu vao
+# data/clone_settings.json) — khong can sua file nay.
+# =====================================================================
+
+# --- Noi chua model tieng Viet ---
+CLONE_MODEL_DIR = os.path.join("data", "f5_vi")
+
+# Nguon tai: HF chinh -> hf-mirror (cho mang chan HF). Tai xong file nao cung
+# duoc KIEM TRA NOI DUNG: model phai la checkpoint torch thuc su, vocab phai la
+# bang ky tu thuc su. Trang loi HTML / con tro Git-LFS / file cat dang deu bi
+# phat hien va tu tai lai tu nguon ke tiep (dung de "tai xong" ma dung thi loi).
+_HF = "https://huggingface.co/hynt/F5-TTS-Vietnamese-ViVoice/resolve/main/"
+_HF_MIRROR = "https://hf-mirror.com/hynt/F5-TTS-Vietnamese-ViVoice/resolve/main/"
+CLONE_ASSETS = {
+    "model.pt": {
+        "label": "Model giong Viet — ViVoice 1000h (~1.3GB)",
+        "kind": "torch",
+        "min_bytes": 500_000_000,
+        "urls": [_HF + "model_last.pt", _HF_MIRROR + "model_last.pt"],
+    },
+    "vocab.txt": {
+        "label": "Bang ky tu (vocab)",
+        "kind": "vocab",
+        "min_bytes": 200,
+        # vocab.txt la file DUNG; config.json chi la duong lui cho ban repo cu
+        # (neu tai ve la JSON thi bi loai ngay, khong ghi de file tot).
+        "urls": [_HF + "vocab.txt", _HF_MIRROR + "vocab.txt", _HF + "config.json"],
+    },
+}
+CLONE_DOWNLOAD_RETRY = 3     # so lan thu lai moi nguon khi mang dut
+
+# --- Worker (tien trinh rieng giu model trong RAM) ---
+CLONE_WORKER_PORT = 8081     # cong dau tien thu; bi chiem thi tu do len 8082...
+CLONE_WORKER_PORT_TRIES = 10
+CLONE_WORKER_BOOT_TIMEOUT = 300   # giay — lan dau nap torch + model rat lau
+CLONE_WORKER_IDLE_EXIT = 0   # >0 = worker tu tat sau bay nhieu giay khong dung
+
+# --- Chat luong sinh giong ---
+# nfe_step: so buoc khuech tan. 16 = nhanh, 32 = chuan, 48 = min nhat (cham ~1.5x).
+CLONE_NFE_STEP = 16 if platform.system() == "Darwin" else 32
+CLONE_CFG_STRENGTH = 2.0     # do "giong mau" — cao qua de bi gat, thap qua thi nhoe
+CLONE_SWAY_SAMPLING = -1.0   # -1 = mac dinh F5, cho phat am on dinh nhat
+CLONE_CROSS_FADE = 0.12      # giay — noi cac khuc ben trong 1 cau cho lien mach
+CLONE_TARGET_RMS = 0.1       # chuan hoa am luong ben trong F5
+CLONE_SEED = -1              # -1 = ngau nhien; dat so cu the de tai lap ket qua
+CLONE_DEVICE = "auto"        # auto | cuda | mps | cpu
+CLONE_LOWERCASE = True       # model ViVoice duoc train chu thuong
+CLONE_MAX_CHARS_PER_CUE = 220  # cau dai hon se tu cat theo dau cau truoc khi doc
+CLONE_RETRY = 1              # so lan doc lai RIENG nhung doan bi loi (khong bo job)
+CLONE_FAIL_RATIO = 0.35      # loi vuot ti le nay moi bao that bai ca job
+
+# --- Hau ky am thanh (chay trong tien trinh chinh, thuan Python) ---
+CLONE_POST_TRIM = True       # cat im lang dau/cuoi tung doan -> khop timestamp
+CLONE_POST_NORMALIZE = True  # can bang am luong moi doan (het to nho that thuong)
+CLONE_POST_PEAK_DBFS = -1.5  # dinh am luong sau chuan hoa
+CLONE_POST_MAX_GAIN_DB = 12.0  # khong keo qua tay (tranh keo ca tieng on)
+CLONE_POST_FADE_MS = 10      # fade in/out chong tieng "tach" khi lap track
+
+# --- Mau giong tham chieu (ref) ---
+CLONE_REF_MAX_SEC = 12.0     # F5 dat chat luong tot nhat voi mau 6-12 giay
+CLONE_REF_MIN_SEC = 3.0      # ngan hon se canh bao
+CLONE_REF_DENOISE = False    # bat neu mau co tieng on nen (co the lam mat hoi)
+CLONE_REF_TRANSCRIBE_MODEL = "small"   # model Whisper dung de tu lay script mau
+CLONE_SR = 24000             # F5 lam viec o 24kHz — khop luon voi track lap rap
 
 # --- Dich "xin" bang AI (tuy chon, nang chat luong dich len muc long tieng chuyen nghiep) ---
 # Lay key MIEN PHI (khong can the) tai https://aistudio.google.com -> "Get API key",

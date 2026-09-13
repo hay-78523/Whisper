@@ -12,3 +12,7 @@ test_env/
 data/f5_vi/
 data/voice_profiles/
 .DS_Store
+data/clone_settings.json
+data/clone_python.txt
+data/logs/
+data/previews/
