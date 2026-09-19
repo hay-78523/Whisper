@@ -132,15 +132,66 @@
           </select>
         </label>
       </div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin:18px 0 8px">
+        3. Ảnh cho cảnh &amp; nhân vật <span class="muted" style="font-weight:400;font-size:12px">— mỗi cảnh bỏ nhiều góc ảnh, đoạn lời dài tool tự đổi góc</span>
+      </div>
+      <div class="char-tabs" id="scene_tabs"></div>
+      <div id="scene_panel" style="display:none;border:1px solid var(--border);border-top:none;border-radius:0 0 16px 16px;background:var(--card);padding:12px">
+        <div class="btnrow" style="margin:0 0 10px">
+          <button class="btn" id="sc_upload">🖼 Thêm ảnh vào cảnh này</button>
+          <button class="btn" id="sc_insert" style="background:#e9f3ff;border-color:#a9cdf5;color:#1c5a9e;font-weight:600">Chèn [cảnh:…] vào kịch bản</button>
+          <button class="btn" id="sc_del">Xóa cảnh</button>
+          <input type="file" id="sc_file" accept="image/*" multiple style="display:none">
+          <span id="sc_msg" class="muted" style="font-size:12px"></span>
+        </div>
+        <div id="sc_thumbs" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+
+      <div class="opts" id="story_opts" style="margin-top:12px">
+        <label class="opt">Khung hình
+          <select id="sv_ratio">
+            <option value="16:9">16:9 — YouTube</option>
+            <option value="9:16">9:16 — TikTok/Reels</option>
+            <option value="1:1">1:1 — vuông</option>
+            <option value="4:5">4:5 — feed dọc</option>
+          </select>
+        </label>
+        <label class="opt">Chuyển động
+          <select id="sv_motion">
+            <option value="cut">tĩnh — nhanh nhất</option>
+            <option value="zoom" selected>zoom nhẹ (Ken Burns)</option>
+          </select>
+        </label>
+        <label class="opt">Chuyển cảnh
+          <select id="sv_trans">
+            <option value="0">cắt thẳng</option>
+            <option value="0.5" selected>mờ dần 0,5s</option>
+            <option value="1">mờ dần 1s</option>
+          </select>
+        </label>
+        <label class="opt">Đổi góc mỗi
+          <select id="sv_angle">
+            <option value="3">3 giây</option>
+            <option value="4.5" selected>4,5 giây</option>
+            <option value="6">6 giây</option>
+            <option value="9">9 giây</option>
+          </select>
+        </label>
+      </div>
+
       <button id="tgo" disabled>Dịch &amp; tạo giọng đọc</button>
+      <button id="tvideo" disabled style="margin-top:10px">🎬 Dựng video từ ảnh</button>
       <div id="t_status" style="margin-top:14px;font-size:14px;color:var(--muted);display:none"></div>
       <div id="t_result" style="display:none;margin-top:16px">
         <div class="tabs" style="margin-bottom:10px" id="t_transwrap">
           <span class="tab active" style="cursor:default">Bản dịch</span>
         </div>
         <div id="t_trans" style="white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:260px;overflow-y:auto;color:var(--text)"></div>
+        <video id="t_video" controls playsinline style="width:100%;margin-top:12px;border-radius:12px;display:none;background:#000"></video>
         <audio id="t_player" controls style="width:100%;margin-top:12px"></audio>
         <div class="btnrow">
+          <button class="btn" id="t_dlvideo" style="display:none">Tải video</button>
+          <button class="btn" id="t_dlsrt" style="display:none">Tải phụ đề .srt</button>
           <button class="btn" id="t_dl">Tải audio</button>
           <button class="btn" id="t_copy">Copy bản dịch</button>
         </div>
@@ -771,12 +822,16 @@
   // ---------- che do Van ban: dich + doc ----------
   var ttext = document.getElementById('ttext');
   var tgo = document.getElementById('tgo');
-  ttext.addEventListener('input', function () { tgo.disabled = !ttext.value.trim(); });
+  ttext.addEventListener('input', function () {
+    tgo.disabled = !ttext.value.trim();
+    if (typeof syncVideoBtn === 'function') syncVideoBtn();
+  });
 
   // ---- thanh cong cu bieu cam ----
   document.querySelectorAll('.tagbtn').forEach(function (b) {
     b.addEventListener('click', function () {
       var ins = b.dataset.ins;
+      if (!ins) return;              // nut co style tagbtn nhung tu xu ly rieng
       var s = ttext.selectionStart, e = ttext.selectionEnd, v = ttext.value;
       if (ins.indexOf('|') >= 0) {              // *|* — boc quanh vung boi den
         var parts = ins.split('|');
@@ -832,6 +887,228 @@
       });
   });
 
+  // ================= Ảnh cho cảnh & nhân vật (dựng video) =================
+  var _scenes = [], _activeScene = null;
+
+  function scEsc(x) {
+    return (x + '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+
+  function loadScenes(keep) {
+    return fetch('/api/scenes').then(function (r) { return r.json(); }).then(function (d) {
+      _scenes = d.scenes || [];
+      if (!keep || !_scenes.some(function (x) { return x.name === _activeScene; })) {
+        _activeScene = _scenes.length ? _scenes[0].name : null;
+      }
+      renderScenes();
+    }).catch(function () {});
+  }
+
+  function activeScene() {
+    for (var i = 0; i < _scenes.length; i++) {
+      if (_scenes[i].name === _activeScene) return _scenes[i];
+    }
+    return null;
+  }
+
+  function renderScenes() {
+    var bar = document.getElementById('scene_tabs');
+    bar.innerHTML = '';
+    var lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:13px;font-weight:600;margin:0 8px 0 12px;color:var(--text)';
+    lbl.textContent = 'Cảnh:';
+    bar.appendChild(lbl);
+
+    _scenes.forEach(function (sc) {
+      var t = document.createElement('div');
+      t.className = 'char-tab char-custom ' + (sc.name === _activeScene ? 'active' : '');
+      t.innerHTML = '<span>' + scEsc(sc.label || sc.name) +
+        ' <span class="muted" style="font-size:11px">(' + sc.count + ' ảnh)</span></span>';
+      t.addEventListener('click', function () { _activeScene = sc.name; renderScenes(); });
+      bar.appendChild(t);
+    });
+
+    var add = document.createElement('button');
+    add.className = 'char-tab-add';
+    add.textContent = '+ Cảnh mới';
+    add.addEventListener('click', function () {
+      var name = prompt('Tên cảnh hoặc nhân vật (vd: Lan, rạp Starlight, sảnh chờ…):');
+      if (!name || !name.trim()) return;
+      _activeScene = name.trim();
+      _scenes.push({ name: name.trim(), label: name.trim(), count: 0, images: [] });
+      renderScenes();
+      document.getElementById('sc_msg').textContent =
+        'Cảnh mới — bấm "Thêm ảnh vào cảnh này" để tải ảnh lên.';
+      document.getElementById('sc_file').click();
+    });
+    bar.appendChild(add);
+
+    var panel = document.getElementById('scene_panel');
+    var sc = activeScene();
+    panel.style.display = _activeScene ? 'block' : 'none';
+    var th = document.getElementById('sc_thumbs');
+    th.innerHTML = '';
+    if (sc && sc.images) {
+      sc.images.forEach(function (f) {
+        var box = document.createElement('div');
+        box.style.cssText = 'position:relative;width:104px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--border)';
+        var img = document.createElement('img');
+        img.src = '/api/scene_image?scene=' + encodeURIComponent(sc.name) +
+                  '&file=' + encodeURIComponent(f);
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+        box.appendChild(img);
+        var x = document.createElement('span');
+        x.textContent = '✕';
+        x.title = 'Xóa ảnh này';
+        x.style.cssText = 'position:absolute;top:2px;right:4px;cursor:pointer;color:#fff;' +
+          'text-shadow:0 1px 3px #000;font-size:13px';
+        x.addEventListener('click', function () {
+          fetch('/api/scene_delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scene: sc.name, file: f })
+          }).then(function () { loadScenes(true); });
+        });
+        box.appendChild(x);
+        th.appendChild(box);
+      });
+    }
+    if (sc && !sc.count) {
+      th.innerHTML = '<span class="muted" style="font-size:12px">Chưa có ảnh — ' +
+        'tải lên vài góc chụp của cảnh/nhân vật này.</span>';
+    }
+    syncVideoBtn();
+  }
+
+  function syncVideoBtn() {
+    var btn = document.getElementById('tvideo');
+    if (!btn) return;
+    var hasImg = _scenes.some(function (x) { return x.count > 0; });
+    var hasText = !!document.getElementById('ttext').value.trim();
+    btn.disabled = !(hasImg && hasText);
+    btn.title = hasImg ? '' : 'Cần ít nhất một cảnh có ảnh';
+  }
+
+  document.getElementById('sc_upload').addEventListener('click', function () {
+    document.getElementById('sc_file').click();
+  });
+
+  document.getElementById('sc_file').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files || []);
+    var msg = document.getElementById('sc_msg');
+    this.value = '';
+    if (!files.length || !_activeScene) return;
+    var i = 0, errs = [];
+    (function next() {
+      if (i >= files.length) {
+        msg.textContent = errs.length ? ('Lỗi: ' + errs.join('; '))
+          : ('Đã thêm ' + files.length + ' ảnh.');
+        loadScenes(true);
+        return;
+      }
+      var f = files[i];
+      msg.textContent = 'Đang tải ảnh ' + (i + 1) + '/' + files.length + '…';
+      fetch('/api/scene_add?scene=' + encodeURIComponent(_activeScene) +
+            '&filename=' + encodeURIComponent(f.name), { method: 'POST', body: f })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) errs.push(f.name + ': ' + (res.j.error || 'lỗi'));
+          i++; next();
+        })
+        .catch(function () { errs.push(f.name + ': mạng lỗi'); i++; next(); });
+    })();
+  });
+
+  document.getElementById('sc_insert').addEventListener('click', function () {
+    if (!_activeScene) return;
+    var ins = '\n[cảnh:' + _activeScene + '] ';
+    var s = ttext.selectionStart, v = ttext.value;
+    if (s === 0 || v.charAt(s - 1) === '\n') ins = '[cảnh:' + _activeScene + '] ';
+    ttext.value = v.slice(0, s) + ins + v.slice(s);
+    ttext.setSelectionRange(s + ins.length, s + ins.length);
+    ttext.focus();
+    tgo.disabled = !ttext.value.trim();
+    syncVideoBtn();
+  });
+
+  document.getElementById('sc_del').addEventListener('click', function () {
+    var sc = activeScene();
+    if (!sc) return;
+    if (!confirm('Xóa cảnh "' + (sc.label || sc.name) + '" cùng toàn bộ ảnh?')) return;
+    fetch('/api/scene_delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene: sc.name })
+    }).then(function () { _activeScene = null; loadScenes(); });
+  });
+
+  document.getElementById('tvideo').addEventListener('click', function () {
+    var btn = this, st = document.getElementById('t_status');
+    btn.disabled = true; tgo.disabled = true;
+    st.style.display = 'block';
+    st.innerHTML = '<span class="spinner"></span>Đang gửi…';
+    document.getElementById('t_result').style.display = 'none';
+    resetEta();
+    fetch('/api/story_video', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: ttext.value,
+        voice: document.getElementById('t_voice').value,
+        rate: document.getElementById('t_rate').value,
+        target: document.getElementById('t_target').value,
+        ratio: document.getElementById('sv_ratio').value,
+        motion: document.getElementById('sv_motion').value,
+        transition: parseFloat(document.getElementById('sv_trans').value),
+        angle_every: parseFloat(document.getElementById('sv_angle').value)
+      })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j.error || 'Lỗi không rõ');
+        var jobId = res.j.job;
+        pollJob(jobId, function (j) {
+          var label = { tts: 'Đọc đoạn ', images: 'Chuẩn bị ảnh ', render: 'Dựng hình ' }[j.phase]
+            || 'Đang xử lý ';
+          st.innerHTML = barHtml(j) + '<span class="spinner"></span>' + label +
+            j.done + '/' + (j.total || '…') + etaText(j);
+        }, function (err, j) {
+          btn.disabled = false; tgo.disabled = !ttext.value.trim();
+          if (err) { st.innerHTML = err.message; return; }
+          st.style.display = 'none';
+          var r = j.result || {};
+          var vid = document.getElementById('t_video');
+          vid.src = '/api/video?id=' + jobId;
+          vid.style.display = 'block';
+          document.getElementById('t_player').src = '/api/audio?id=' + jobId;
+          document.getElementById('t_transwrap').style.display = 'none';
+          document.getElementById('t_trans').textContent =
+            r.slots + ' khung hình · ' + r.shots + ' đoạn lời · ' + r.seconds + ' giây' +
+            (r.missing && r.missing.length ? ' · cảnh thiếu ảnh: ' + r.missing.join(', ') : '');
+          document.getElementById('t_result').style.display = 'block';
+          var dv = document.getElementById('t_dlvideo');
+          dv.style.display = 'inline-flex';
+          dv.onclick = function () {
+            var a = document.createElement('a');
+            a.href = '/api/video?id=' + jobId; a.download = 'video_tu_anh.mp4'; a.click();
+          };
+          var ds = document.getElementById('t_dlsrt');
+          ds.style.display = r.srt ? 'inline-flex' : 'none';
+          ds.onclick = function () {
+            var b = new Blob([r.srt], { type: 'text/plain;charset=utf-8' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(b); a.download = 'phu_de.srt'; a.click();
+          };
+          document.getElementById('t_dl').onclick = function () {
+            var a = document.createElement('a');
+            a.href = '/api/audio?id=' + jobId; a.download = 'giong_doc.m4a'; a.click();
+          };
+        });
+      })
+      .catch(function (e) {
+        btn.disabled = false; tgo.disabled = !ttext.value.trim();
+        st.innerHTML = e.message;
+      });
+  });
+
+  loadScenes();
+
   tgo.addEventListener('click', function () {
     var st = document.getElementById('t_status');
     var target = document.getElementById('t_target').value;
@@ -863,6 +1140,9 @@
           document.getElementById('t_transwrap').style.display = trans ? 'flex' : 'none';
           document.getElementById('t_trans').textContent = trans;
           var player = document.getElementById('t_player');
+          document.getElementById('t_video').style.display = 'none';
+          document.getElementById('t_dlvideo').style.display = 'none';
+          document.getElementById('t_dlsrt').style.display = 'none';
           player.src = '/api/audio?id=' + jobId;
           document.getElementById('t_result').style.display = 'block';
           document.getElementById('t_dl').onclick = function () {

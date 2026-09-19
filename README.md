@@ -15,6 +15,8 @@ pinned: false
 - 🎤 **Nhân bản giọng (F5-TTS)** — *tính năng chính*: 6–12 giây mẫu là có giọng của bạn,
   chạy hẳn trên máy, không giới hạn. Cài 1 lệnh: `python3 setup_clone.py`
   ([xem mục Voice Cloning](#-voice-cloning--nhân-bản-giọng-tính-năng-chính))
+- 🎬 **Dựng video từ ảnh**: mỗi nhân vật/bối cảnh một bộ nhiều góc ảnh, tool tự đổi góc
+  theo độ dài lời đọc rồi xuất mp4 16:9 / 9:16 kèm `.srt`
 - Phiên âm: **Whisper** (`faster-whisper`, chạy local, batched + VAD + đa luồng CPU)
 - Dịch: Google Translate (miễn phí, cần mạng) hoặc AI (Gemini/Groq/Ollama)
 - Giọng đọc khác: **edge-tts** (neural, cần mạng), VieNeu (local), `say:Linh` (offline macOS)
@@ -37,6 +39,7 @@ whisper_stt/
     │   ├── clone.py       # 🎤 nhân bản giọng: giọng mẫu, hậu kỳ, điều phối worker
     │   ├── clone_worker.py# 🎤 tiến trình riêng giữ model F5-TTS (sập không chết web)
     │   ├── clone_assets.py# 🎤 tải model: resume + kiểm tra nội dung + mirror
+    │   ├── story.py       # 🎬 bộ ảnh theo cảnh + trải ảnh theo lời + dựng mp4
     │   ├── translate.py   # dịch máy theo khúc
     │   ├── users.py       # tài khoản: PBKDF2, vai trò user/admin
     │   └── jobs.py        # JobManager: job nền + tiến độ + dọn dẹp
@@ -197,11 +200,51 @@ nhanh hơn nhiều — video dài mà gấp thì dùng giọng edge. **Điều k
 CC-BY-NC-SA (phi thương mại), chỉ clone giọng của mình/người đã đồng ý, ghi rõ audio do AI
 tạo khi đăng công khai.
 
+## 🎬 Dựng video từ ảnh — nhiều góc cho mỗi nhân vật / bối cảnh
+
+Viết kịch bản → tool đọc → **tự trải ảnh lên đúng độ dài từng câu** → ra mp4 + `.srt`.
+Mỗi nhân vật hoặc bối cảnh là một **cảnh** chứa nhiều góc ảnh; đoạn lời dài thì tool
+tự đổi sang góc khác thay vì để một tấm ảnh chết suốt đoạn.
+
+### Dùng
+
+1. Trang chính → tab **Soạn thảo Kịch bản** → mục **3. Ảnh cho cảnh & nhân vật**
+   → **+ Cảnh mới** (vd: `Lan`, `rạp Starlight`, `sảnh chờ`) → tải lên nhiều ảnh.
+2. Trong kịch bản, bấm **Chèn [cảnh:…]** ở chỗ muốn chuyển cảnh:
+
+   ```
+   [cảnh:lan] Chào cả nhà, tối nay Starlight có suất chiếu đặc biệt.
+   [cảnh:rap_starlight] Khán giả xếp hàng từ sáu giờ chiều, sảnh chờ kín người.
+   [cảnh:lan] Mình đặt vé online nên vào thẳng, không phải chờ.
+   ```
+
+   Không chèn thẻ nào cũng chạy — tool xoay vòng toàn bộ ảnh đang có.
+   Thẻ `[giọng:…]` (phân vai) và thẻ biểu cảm `[vui] [nghỉ] *nhấn*` dùng chung như cũ.
+3. Chọn khung hình / chuyển động rồi bấm **🎬 Dựng video từ ảnh**.
+
+### Cách tool trải ảnh
+
+| Tình huống | Tool xử lý |
+|---|---|
+| Đoạn lời dài 12 giây, cảnh có 4 góc | Đổi góc mỗi ~4,5 giây (chỉnh được: 3 / 4,5 / 6 / 9 giây) |
+| Quay lại cảnh cũ ở đoạn sau | Bắt đầu từ góc **kế tiếp**, không lặp y hệt lần trước |
+| Ảnh dọc trong khung ngang (và ngược lại) | Giữ nguyên ảnh, nền là chính ảnh đó phóng to làm mờ — không viền đen, không cắt mất mặt |
+| Cảnh có thẻ nhưng chưa tải ảnh | Mượn ảnh cảnh khác và báo rõ trong kết quả, không làm hỏng job |
+
+Khung hình: **16:9** (YouTube) · **9:16** (TikTok/Reels) · **1:1** · **4:5**.
+Chuyển động: **tĩnh** (nhanh nhất) hoặc **zoom nhẹ Ken Burns** (luân phiên phóng/thu).
+Chuyển cảnh: cắt thẳng hoặc **mờ dần** 0,5–1s (quá 60 khung hình tool tự tắt mờ cho nhẹ máy).
+Xuất kèm **`.srt`** đúng mốc thời gian để đăng lên nền tảng nào cũng có phụ đề.
+
+Ảnh lưu ở `data/story_scenes/<tên cảnh>/`, bản đã căn khung cache ở `data/story_cache/`
+(xóa thoải mái, tool tự dựng lại). Tất cả tài khoản đăng nhập dùng chung bộ ảnh này.
+
 ## Ghi chú vận hành
 
 - Job giữ trong RAM (tối đa 50 job gần nhất — chỉnh trong `app/config.py`); audio lồng tiếng nằm trong job, xóa job là giải phóng RAM.
 - Transcript rất dài (>60k ký tự) web sẽ từ chối lồng tiếng — dùng CLI.
 - Muốn đổi cổng/giọng/giới hạn mặc định: sửa một chỗ duy nhất `app/config.py`.
+- Video từ ảnh: ảnh gốc ở `data/story_scenes/`, bản căn khung cache ở `data/story_cache/`.
 - Voice clone: model ở `data/f5_vi/`, giọng mẫu ở `data/voice_profiles/<tên>/` (mỗi giọng gồm
   `ref.wav` đã chuẩn hóa, `ref.txt` script mẫu, `meta.json`, `sample.wav` bản nghe thử).
   Xóa giọng trong /admin là xóa cả thư mục. Log engine: `data/logs/clone_worker.log`.

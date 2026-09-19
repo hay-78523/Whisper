@@ -24,6 +24,14 @@ API quan tri:
     POST /api/admin/user_delete {username}
     POST /api/admin/user_password {username,password}
 
+API dung video tu anh (story):
+    GET  /api/scenes                           danh sach canh + so anh moi canh
+    GET  /api/scene_image?scene=&file=         xem 1 anh
+    POST /api/scene_add?scene=&filename=       (body = file anh) them anh vao canh
+    POST /api/scene_delete {scene, file?}      xoa 1 anh, hoac ca canh
+    POST /api/story_video {text,voice,rate,target,ratio,motion,transition,angle_every}
+         -> job: doc tung doan -> trai anh theo do dai that -> xuat mp4 + .srt
+
 API nhan ban giong (Voice Clone — tinh nang chinh):
     GET  /api/admin/clone_status[?recheck=1]   thieu gi, loi gi, dang chay tren gi
     POST /api/admin/clone_install {force?}     tai model giong Viet (job nen, co resume)
@@ -51,7 +59,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .. import VERSION, config
-from ..core import clone, engine, users
+from ..core import clone, engine, story, users
 from ..core.jobs import JobManager
 
 # doc thu giong nhan ban: chi 1 yeu cau mot luc (model giu GPU/CPU rat nang)
@@ -368,6 +376,28 @@ class Handler(BaseHTTPRequestHandler):
                     if job["state"] == "done":
                         body["result"] = job["result"]
                     self._send(200, body)
+        elif route == "/api/scenes":
+            if self._require():
+                self._send(200, {"scenes": story.list_scenes(),
+                                 "ratios": sorted(story.ratios().keys())})
+        elif route == "/api/scene_image":
+            if self._require():
+                qs = parse_qs(parsed.query)
+                sc = story.safe_name(qs.get("scene", [""])[0])
+                fname = Path(qs.get("file", [""])[0]).name
+                fp = story.scene_dir(sc) / fname
+                if (fp.is_file() and fp.suffix.lower() in story.IMAGE_EXTS
+                        and str(fp.resolve()).startswith(str(story.SCENE_DIR.resolve()))):
+                    mime = {"png": "image/png", "webp": "image/webp",
+                            "gif": "image/gif"}.get(fp.suffix.lower().lstrip("."), "image/jpeg")
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime)
+                    self.send_header("Content-Length", str(fp.stat().st_size))
+                    self.send_header("Cache-Control", "max-age=300")
+                    self.end_headers()
+                    self.wfile.write(fp.read_bytes())
+                else:
+                    self._send(404, {"error": "not found"})
         elif route == "/api/voice_preview":
             if self._require():
                 self._get_voice_preview(parsed.query)
@@ -486,6 +516,34 @@ class Handler(BaseHTTPRequestHandler):
                     job = jobs.start_annotate(
                         text, (p.get("target") or "").strip() or None)
                     self._send(200, {"ok": True, "job": job["id"]})
+            elif route == "/api/scene_add":
+                if self._require():
+                    qs = parse_qs(urlparse(self.path).query)
+                    sc = (qs.get("scene") or [""])[0]
+                    fname = (qs.get("filename") or [""])[0]
+                    if not sc.strip():
+                        raise ValueError("Thiếu tên cảnh.")
+                    tmp, _ = self._read_body_to_temp("scene_img")
+                    try:
+                        size_mb = os.path.getsize(tmp) / 1e6
+                        if size_mb > config.STORY_MAX_IMAGE_MB:
+                            raise ValueError("Ảnh quá lớn (%.0f MB > %d MB)."
+                                             % (size_mb, config.STORY_MAX_IMAGE_MB))
+                        info = story.add_image(sc, Path(tmp).read_bytes(),
+                                               filename=fname, label=sc)
+                    finally:
+                        os.unlink(tmp)
+                    self._send(200, {"ok": True, "image": info})
+            elif route == "/api/scene_delete":
+                if self._require():
+                    p = self._json_body()
+                    sc = str(p.get("scene", ""))
+                    f = p.get("file")
+                    ok = story.delete_image(sc, f) if f else story.delete_scene(sc)
+                    self._send(200 if ok else 404, {"ok": ok})
+            elif route == "/api/story_video":
+                if self._require():
+                    self._post_story_video()
             elif route == "/api/admin/preload":
                 if self._require("admin"):
                     self._post_preload()
@@ -572,6 +630,32 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, {"ok": True, "user": username, "role": role}, extra_headers=[
             ("Set-Cookie", "%s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d"
              % (SESSION_COOKIE, token, config.ADMIN_SESSION_HOURS * 3600))])
+
+    def _post_story_video(self):
+        """Dung video tu anh: kich ban + bo anh tung canh -> mp4 khop loi doc."""
+        p = self._json_body()
+        text = (p.get("text") or "").strip()
+        if not text:
+            raise ValueError("Thiếu kịch bản.")
+        if len(text) > config.MAX_TTS_CHARS:
+            raise ValueError("Kịch bản quá dài (>%d ký tự)." % config.MAX_TTS_CHARS)
+        voice = (p.get("voice") or config.DEFAULT_VOICE).strip()
+        ratio = (p.get("ratio") or "16:9").strip()
+        if ratio not in story.ratios():
+            raise ValueError("Tỉ lệ khung hình không hợp lệ.")
+        motion = (p.get("motion") or "cut").strip()
+        if motion not in ("cut", "zoom"):
+            raise ValueError("Kiểu chuyển động không hợp lệ.")
+        opts = {
+            "ratio": ratio, "motion": motion,
+            "transition": max(0.0, min(2.0, float(p.get("transition") or 0))),
+            "angle_every": max(1.5, min(30.0, float(p.get("angle_every") or
+                                                    config.STORY_ANGLE_EVERY))),
+            "gap": max(0.0, min(3.0, float(p.get("gap") or config.STORY_GAP))),
+        }
+        job = jobs.start_story_video(text, voice, (p.get("rate") or "+0%"),
+                                     (p.get("target") or "").strip() or None, opts)
+        self._send(200, {"ok": True, "job": job["id"]})
 
     def _read_body_to_temp(self, filename):
         """Doc body tho vao file tam (khong multipart — module cgi da bi xoa o Py3.13)."""

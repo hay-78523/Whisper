@@ -99,6 +99,26 @@ CLONE_REF_DENOISE = False    # bat neu mau co tieng on nen (co the lam mat hoi)
 CLONE_REF_TRANSCRIBE_MODEL = "small"   # model Whisper dung de tu lay script mau
 CLONE_SR = 24000             # F5 lam viec o 24kHz — khop luon voi track lap rap
 
+# =====================================================================
+# DUNG VIDEO TU ANH (story) — moi nhan vat / boi canh mot bo nhieu goc anh
+# ---------------------------------------------------------------------
+# Kich ban danh dau canh bang the [cảnh:tên]; anh cua tung canh nam trong
+# data/story_scenes/<ten>/. Doan loi dai thi tu doi goc anh theo STORY_ANGLE_EVERY.
+# =====================================================================
+STORY_RATIOS = {                 # ti le khung hinh xuat ra
+    "16:9": (1920, 1080),        # YouTube / man hinh ngang
+    "9:16": (1080, 1920),        # TikTok / Reels / Shorts
+    "1:1": (1080, 1080),         # bai dang vuong
+    "4:5": (1080, 1350),         # feed doc Facebook / Instagram
+}
+STORY_FPS = 30
+STORY_MAX_CHARS = 220            # do dai toi da moi doan loi (1 shot)
+STORY_GAP = 0.35                 # giay nghi giua 2 doan (doi canh nghi lau hon 1.6x)
+STORY_ANGLE_EVERY = 4.5          # bao nhieu giay thi doi sang goc anh khac
+STORY_ZOOM = 0.10                # bien do phong/thu Ken Burns (0.10 = 10%)
+STORY_XFADE_MAX = 60             # nhieu hon bay nhieu anh thi tat chuyen canh mo
+STORY_MAX_IMAGE_MB = 30          # tran dung luong moi anh tai len
+
 # --- Dich "xin" bang AI (tuy chon, nang chat luong dich len muc long tieng chuyen nghiep) ---
 # Lay key MIEN PHI (khong can the) tai https://aistudio.google.com -> "Get API key",
 # roi dien vao giua 2 dau nhay duoi day, hoac dat bien moi truong GEMINI_API_KEY.

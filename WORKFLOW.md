@@ -91,6 +91,30 @@ Vì sao tách tiến trình: model chiếm vài GB và có thể sập (hết VR
 server web vẫn sống, tool tự khởi động lại worker; cổng bị chiếm thì tự nhảy cổng.
 Log: `data/logs/clone_worker.log`. Tắt/nạp engine chủ động trong /admin.
 
+## 4b. DỰNG VIDEO TỪ ẢNH (story) — nhiều góc cho mỗi cảnh
+
+```
+KỊCH BẢN                                     BỘ ẢNH
+[cảnh:lan]  Chào cả nhà…                     data/story_scenes/lan/        (4 góc)
+[cảnh:rap]  Khán giả xếp hàng từ sớm…        data/story_scenes/rap/        (6 góc)
+   │
+   ├─ plan()      : tách theo thẻ [cảnh:…] / [giọng:…] rồi cắt câu ≤220 ký tự → SHOT
+   ├─ narrate()   : đọc từng shot bằng đúng engine của giọng đó (giữ thẻ biểu cảm),
+   │                giải mã ra PCM 24kHz → BIẾT CHÍNH XÁC shot dài bao nhiêu giây
+   ├─ slots()     : trải ảnh lên trục thời gian đó
+   │                 shot 12s + cảnh 4 góc → 3 khung × 4s (STORY_ANGLE_EVERY)
+   │                 quay lại cảnh cũ → con trỏ chạy tiếp, lấy góc KẾ TIẾP
+   ├─ fit_image() : mỗi ảnh căn về đúng khung (16:9 / 9:16 / 1:1 / 4:5),
+   │                nền = chính ảnh đó phóng to làm mờ; cache theo (ảnh, kích thước)
+   └─ render()    : cut   → concat demuxer, một lệnh ffmpeg, nhanh nhất
+                    zoom  → mỗi khung một clip Ken Burns rồi nối (copy, không re-encode)
+                    mờ dần→ xfade một lượt, offset = mốc thời gian THẬT của khung kế
+                    → mux track tiếng, xuất mp4 + .srt cùng mốc
+```
+
+Bất biến quan trọng: **tổng thời lượng video = tổng thời lượng tiếng đọc** — kể cả khi
+bật chuyển cảnh mờ (mỗi clip được kéo dài đúng bằng thời gian mờ để bù phần chồng lấn).
+
 ## 5. Các engine giọng khác
 
 edge-tts (online, nhanh nhất) · VieNeu (local) · Gemini TTS / persona (online, giàu cảm xúc)

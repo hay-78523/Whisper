@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from ..config import JOB_KEEP
-from . import clone, engine, translate, tts, video
+from . import clone, engine, story, translate, tts, video
 
 
 class JobManager(object):
@@ -348,6 +348,64 @@ class JobManager(object):
                 self._finish(job)
             except Exception as e:
                 self._finish(job, "Loi bien kich: %s" % e)
+
+        threading.Thread(target=work, daemon=True).start()
+        return job
+
+    def start_story_video(self, text, voice, rate, target, opts=None):
+        """Dung video tu ANH: doc kich ban -> do dai tung doan -> trai anh -> mp4."""
+        opts = opts or {}
+        shots = story.plan(text, voice)
+        if not shots:
+            raise ValueError("Kịch bản trống.")
+        have = [sc for sc in story.list_scenes() if sc["count"]]
+        if not have:
+            raise ValueError("Chưa có ảnh nào — tạo cảnh và tải ảnh lên trước đã.")
+        used = story.scenes_used(shots)
+        missing = [sc for sc in used if not story.scene_images(sc)]
+        job = self._new("story", "%d đoạn · %d cảnh" % (len(shots), len(used) or 1))
+        lines = []
+
+        def note(m):
+            lines.append(m)
+            job.update(log=lines[-6:])
+
+        if missing:
+            note("Cảnh chưa có ảnh (%s) — tạm dùng ảnh của cảnh khác."
+                 % ", ".join(missing[:4]))
+
+        def work():
+            out_video = tempfile.mkstemp(suffix=".mp4")[1]
+            try:
+                self._set_phase(job, "tts")
+                pcm, shots2 = story.narrate(
+                    shots, rate=rate, target=target, gap=opts.get("gap"),
+                    progress=lambda d, t: job.update(done=d, total=t))
+                self._set_phase(job, "images")
+                slot_list = story.slots(shots2, angle_every=opts.get("angle_every"))
+                note("%d đoạn lời → %d khung hình" % (len(shots2), len(slot_list)))
+                self._set_phase(job, "render")
+                story.render(slot_list, pcm, out_video,
+                             ratio=opts.get("ratio") or "16:9",
+                             motion=opts.get("motion") or "cut",
+                             transition=float(opts.get("transition") or 0),
+                             progress=lambda d, t: job.update(done=d, total=t),
+                             log=note)
+                job.update(video_path=out_video, mime="video/mp4",
+                           audio=story.encode_audio(pcm))
+                job["result"] = {
+                    "shots": len(shots2), "slots": len(slot_list),
+                    "seconds": round(sum(x["seconds"] for x in slot_list), 1),
+                    "scenes": used, "missing": missing,
+                    "srt": story.srt(shots2), "is_video": True,
+                }
+                self._finish(job)
+            except Exception as e:
+                try:
+                    os.unlink(out_video)
+                except OSError:
+                    pass
+                self._finish(job, "Loi dung video tu anh: %s" % e)
 
         threading.Thread(target=work, daemon=True).start()
         return job

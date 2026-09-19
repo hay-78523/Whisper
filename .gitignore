@@ -16,3 +16,5 @@ data/clone_settings.json
 data/clone_python.txt
 data/logs/
 data/previews/
+data/story_scenes/
+data/story_cache/
