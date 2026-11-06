@@ -42,3 +42,5 @@ mau_cam_xuc/
 # file bat ban ca nhan chi nam trong goi zip ban whisper
 /PERSONAL
 kiem_tra_cam_xuc/
+KET_QUA_TEST_*.zip
+chay_tat_ca_*.log

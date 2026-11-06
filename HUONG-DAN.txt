@@ -7,6 +7,12 @@ WHISPER STT - BAN V4 (CHAY NGAY, KHONG CAN CAI DAT)
    - May quan net co "dong bang o C" (khoi dong lai la mat): nen giai nen ra
      o D: / USB de giong nhan ban + ket qua khong bi xoa.
 
+1b. CACH NHANH NHAT (TEST TREN MAY GPU): nhay dup  CHAY-TAT-CA.bat  - chay het 1 lan:
+   kiem tra engine -> tai PyTorch GPU (lan dau ~3GB) -> kiem tra Chatterbox -> tai AI bien
+   kich (cua so rieng) -> tao mau cam xuc moi giong con thieu -> kiem tra cam xuc + do giong
+   -> gom ket qua vao 1 file KET_QUA_TEST_<ngay gio>.zip -> mo phan mem.
+   Lan dau 30-90 phut. Xong GUI FILE KET_QUA_TEST_....zip cho ky thuat.
+
 2. Nhay dup  Start-Windows.bat
    - Lan dau mat khoang 30-60 giay de nap engine. Trinh duyet tu mo.
    - May co card NVIDIA: LAN DAU tool tu tai ban GPU cua PyTorch (~3GB, can

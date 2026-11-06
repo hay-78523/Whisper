@@ -29,7 +29,7 @@ OUT = ROOT / "BAN_GIAO_KHACH"
 TOP_FILES = ["HUONG-DAN.txt", "BANG-THE-BIEU-CAM.txt", "run.py", "Start-Windows.bat",
              "setup_gpu.py", "setup_ai.py", "setup_chatterbox.py", "setup_clone.py",
              "test_voices.py", "Test-Voices.bat", "tao_mau_cam_xuc.py", "Tao-Mau-Cam-Xuc.bat",
-             "kiem_tra_cam_xuc.py", "Kiem-Tra-Cam-Xuc.bat"]
+             "kiem_tra_cam_xuc.py", "Kiem-Tra-Cam-Xuc.bat", "chay_tat_ca.py", "CHAY-TAT-CA.bat"]
 STORE = (".safetensors", ".pt", ".mp3", ".zip", ".dll", ".pyd", ".exe", ".bin", ".so",
          ".whl", ".png", ".jpg")
 SKIP = {"__pycache__", ".DS_Store"}
