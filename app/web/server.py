@@ -63,18 +63,16 @@ STATIC = Path(__file__).resolve().parent / "static"
 
 
 def _edition_load():
-    """Ban Doanh nghiep: editions/<ten>/ (edition.json + static/) phu len giao dien goc."""
-    base = Path(__file__).resolve().parents[2] / "editions"
-    name = (os.environ.get("WHISPER_EDITION") or "").strip()
-    if not name and (base / "ACTIVE").is_file():
-        name = (base / "ACTIVE").read_text(encoding="utf-8").strip()
-    d = base / name if name else None
-    if d and (d / "edition.json").is_file():
-        try:
-            return d, json.loads((d / "edition.json").read_text(encoding="utf-8"))
-        except Exception as e:  # noqa: BLE001
-            print("[!] edition.json loi: %s" % e)
-    return None, {}
+    """Giao dien cua ban dang chay: editions/<ten>/static/ phu len giao dien goc.
+    "brand_from": "<ban khac>" -> dung chung logo/mau cua ban do (vd starlight_test).
+    Ban khong co static/ (vd whisper) -> giu giao dien goc."""
+    d, ed = config.EDITION_DIR, config.EDITION
+    if not d:
+        return None, {}
+    src = (d.parent / ed["brand_from"]) if ed.get("brand_from") else d
+    if not (src / "static" / "brand.css").is_file():
+        return None, {}
+    return src, ed
 
 
 def _brand_html(html, name):

@@ -1,0 +1,13 @@
+{
+  "id": "whisper",
+  "name": "Whisper Dubbing Studio",
+  "zip": "1_Whisper_BanCaNhan.zip",
+  "personal": true,
+  "voices": null,
+  "en_voices": [
+    "ray",
+    "adam",
+    "brittney"
+  ],
+  "mo_ta": "Ban CA NHAN 1 khach: giao dien Whisper, tu dang nhap tren may khach, them giong dung ngay."
+}

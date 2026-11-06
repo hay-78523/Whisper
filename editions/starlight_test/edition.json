@@ -1,0 +1,37 @@
+{
+  "id": "starlight_test",
+  "name": "Starlight Voice Studio",
+  "owner": "Starlight Entertainment Center",
+  "product": "Voice Studio",
+  "tagline": "Lồng tiếng AI",
+  "credit": "NEXUS",
+  "creditLabel": "Designed & built by",
+  "titles": {
+    "index.html": "Starlight Voice Studio — Lồng tiếng AI",
+    "admin.html": "Quản trị — Starlight Voice Studio",
+    "login.html": "Đăng nhập — Starlight Voice Studio"
+  },
+  "fonts": "https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+  "marquee": [
+    "Starlight Voice Studio",
+    "Giọng nhân bản",
+    "Lồng tiếng AI",
+    "Kịch bản 40.000 ký tự",
+    "Chatterbox · F5-TTS",
+    "Designed by NEXUS"
+  ],
+  "personal": false,
+  "en_voices": [
+    "ray",
+    "adam",
+    "brittney"
+  ],
+  "brand_from": "starlight",
+  "zip": "3_StarlightVoice_BanTest.zip",
+  "voices": [
+    "adam",
+    "brittney",
+    "ray"
+  ],
+  "mo_ta": "Ban TEST CHUC NANG Starlight: nhu ban doanh nghiep, it giong (3) de test nhanh tren GPU."
+}

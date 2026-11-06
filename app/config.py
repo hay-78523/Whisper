@@ -8,12 +8,34 @@ Docker / Hugging Face Spaces): WHISPER_DEFAULT_MODEL, WHISPER_USERS.
 import os
 from pathlib import Path as _Path
 
+# --- BAN DANG CHAY (editions/<ten>/edition.json) ---
+# Moi ban (whisper / starlight / starlight_test) la 1 thu muc trong editions/: giao dien,
+# che do ca nhan, danh sach giong, ten file zip. Chon ban: bien moi truong WHISPER_EDITION
+# hoac file editions/ACTIVE (dong goi san trong zip). Code app/ DUNG CHUNG cho moi ban.
+def _load_edition():
+    import json as _json
+    base = _Path(__file__).resolve().parents[1] / "editions"
+    name = (os.environ.get("WHISPER_EDITION") or "").strip()
+    if not name and (base / "ACTIVE").is_file():
+        name = (base / "ACTIVE").read_text(encoding="utf-8").strip()
+    f = base / name / "edition.json" if name else None
+    if f and f.is_file():
+        try:
+            return name, base / name, _json.loads(f.read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001
+            print("[!] %s loi: %s" % (f, e))
+    return "", None, {}
+
+
+EDITION_NAME, EDITION_DIR, EDITION = _load_edition()
+
 # --- BAN CA NHAN (1 khach, 1 may) ---
-# Bat khi co file PERSONAL canh run.py (dong goi san trong ban ca nhan) hoac WHISPER_PERSONAL=1:
+# Bat khi edition.json co "personal": true, hoac co file PERSONAL canh run.py, hoac WHISPER_PERSONAL=1:
 #   * mo tren CHINH may do -> tu dang nhap (khong can mat khau), may khac van phai dang nhap
 #   * them giong dung ngay (khong qua duyet), /admin thanh trang Cai dat gon
 #     (an nhat ky nhan vien, giong cho duyet, quan ly tai khoan)
 PERSONAL_MODE = (os.environ.get("WHISPER_PERSONAL") == "1"
+                 or bool(EDITION.get("personal"))
                  or (_Path(__file__).resolve().parents[1] / "PERSONAL").is_file())
 
 # --- Web server ---

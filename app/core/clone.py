@@ -318,7 +318,15 @@ def list_profiles(include_all_en=False, include_pending=False):
                        if d.is_dir() and (d / "ref.wav").exists())
     if include_all_en:
         return all_names
-    keep_en = set(_cfg("ENTERPRISE_EN_VOICES", ENTR_EN_VOICES) or ENTR_EN_VOICES)
+    from .. import config as _c
+    only = _c.EDITION.get("voices")                 # ban chi gom mot so giong
+    if isinstance(only, list):
+        all_names = [n for n in all_names if n in only or profile_meta(n).get("custom_added")]
+    en_cfg = _c.EDITION.get("en_voices")            # "all" = hien moi giong Anh
+    if en_cfg == "all":
+        return [n for n in all_names if include_pending or not is_pending(n)]
+    keep_en = set(en_cfg if isinstance(en_cfg, list)
+                  else (_cfg("ENTERPRISE_EN_VOICES", ENTR_EN_VOICES) or ENTR_EN_VOICES))
     out = []
     for n in all_names:
         if not include_pending and is_pending(n):

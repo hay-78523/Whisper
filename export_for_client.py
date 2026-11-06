@@ -68,9 +68,16 @@ def plan(edition=""):
     for f in TOP_FILES:
         if (ROOT / f).exists():
             items.append((ROOT / f, f))
+    ed_cfg = {}
+    if edition:
+        ed_cfg = json.loads((ROOT / "editions" / edition / "edition.json").read_text(encoding="utf-8"))
+    only = ed_cfg.get("voices")
     for d in TOP_DIRS:
         if (ROOT / d).exists():
-            items += list(walk(ROOT / d, d))
+            got = list(walk(ROOT / d, d))
+            if d == "data/voice_profiles" and isinstance(only, list):   # ban chi gom mot so giong
+                got = [x for x in got if x[1].split("/")[2] in only]
+            items += got
     model = next(p for p in MODEL_CANDS if p.exists())
     items.append((model, "data/f5_vi/model.pt"))
     items.append((ROOT / "data" / "f5_vi" / "vocab.txt", "data/f5_vi/vocab.txt"))
@@ -85,6 +92,9 @@ def plan(edition=""):
     if edition:
         # ban Doanh nghiep: kem lop nhan dien + file ACTIVE de tool tu bat
         items += list(walk(ROOT / "editions" / edition, "editions/" + edition))
+        if ed_cfg.get("brand_from"):          # dung chung logo/mau cua ban khac
+            items += list(walk(ROOT / "editions" / ed_cfg["brand_from"],
+                               "editions/" + ed_cfg["brand_from"]))
         act = ROOT / "_build_v4" / ("ACTIVE_" + edition)
         act.parent.mkdir(parents=True, exist_ok=True)
         act.write_text(edition, encoding="utf-8")
@@ -106,8 +116,9 @@ def main():
         ed = ROOT / "editions" / a.edition / "edition.json"
         if not ed.is_file():
             sys.exit("[x] Khong thay %s" % ed)
-        name = json.loads(ed.read_text(encoding="utf-8")).get("name") or a.edition
-        ZIP_NAME = "BAN_GIAO_KHACH/%s.zip" % name.replace(" ", "_")
+        cfg = json.loads(ed.read_text(encoding="utf-8"))
+        ZIP_NAME = "BAN_GIAO_KHACH/" + (cfg.get("zip") or
+                                        "%s.zip" % (cfg.get("name") or a.edition).replace(" ", "_"))
         STATE = ROOT / "_build_v4" / ("export_state_%s.json" % a.edition)
     Path(ZIP_NAME).parent.mkdir(exist_ok=True)
     t0 = time.time()
