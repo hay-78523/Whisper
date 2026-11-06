@@ -46,7 +46,13 @@ WHISPER STT - BAN V4 (CHAY NGAY, KHONG CAN CAI DAT)
 5. TEST NHANH TAT CA GIONG: nhay dup Test-Voices.bat (GPU ~5-15 giay/giong).
    Ket qua trong thu muc test_voices\ (file wav tung giong + BAO_CAO.csv).
 
-5b. MAU CAM XUC CHO GIONG ANH (can GPU NVIDIA): nhay dup Tao-Mau-Cam-Xuc.bat.
+5a. KIEM TRA CAM XUC: nhay dup Kiem-Tra-Cam-Xuc.bat (GPU ~20-40 giay/giong). Moi giong
+   doc cung 1 cau voi [binh thuong] [vui] [gian du] [buon] [thi tham] -> thu muc
+   kiem_tra_cam_xuc\ (wav tung cam xuc + BAO_CAO.csv: % giong giong goc, % cam xuc ro).
+
+5b. MAU CAM XUC (nen dung GPU NVIDIA): nhay dup Tao-Mau-Cam-Xuc.bat.
+   Khong co GPU / giong Viet: tool BIEN DOI mau goc thanh ban hao hung (cao, nhanh, manh
+   hon) va tram (thap, cham, nhe hon), doc thu va chi giu khi giong giong goc >= 80%.
    Giong Anh chua co mau "hao hung"/"tram" se duoc Chatterbox doc 1 doan hao hung +
    1 doan tram bang CHINH giong do (moi mau 3 lan, chi giu ban giong giong goc >= 85%).
    Sau do the [vui] [hao hung]... doc bang mau hao hung, [buon] [diu dang]... bang mau

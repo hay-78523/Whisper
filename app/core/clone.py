@@ -756,6 +756,107 @@ def make_emotion_styles(name, force=False, tries=3, say=None):
     return report
 
 
+# ---- cach 2 (MOI MAY, ca tieng Viet): BIEN DOI chinh mau goc thanh ban hao hung / tram.
+# F5 bat chuoc cao do + nhip + do manh cua mau -> doc theo cam xuc cua mau da bien doi.
+# Do that (adam / giong Viet): hao hung cao +10..23Hz, manh +3..7dB, nhanh hon;
+# tram thap + nhe + cham hon. Moi muc CHAM TREN BAN DOC THAT, giu khi giong >= 80%.
+# (cung, nhip, loc ffmpeg) — thu muc MANH truoc, khong dat thi muc NHE.
+MORPH_LEVELS = {
+    "hype": [(0.7, 1.08, ["compand=attacks=0.02:decays=0.15:points=-80/-80|-30/-24|-15/-9|0/-2",
+                          "volume=2dB"]),
+             (0.4, 1.05, ["compand=attacks=0.02:decays=0.2:points=-80/-80|-30/-26|-15/-11|0/-3",
+                          "volume=1.5dB"])],
+    "calm": [(-1.2, 0.88, ["volume=-4dB", "lowpass=f=6500"]),
+             (-0.7, 0.92, ["volume=-3dB", "lowpass=f=7000"])],
+}
+MORPH_TEST_TEXT = {"en": "We finally made it, and honestly, it feels like a dream.",
+                   "vi": "Cuối cùng chúng ta cũng làm được, cảm giác như một giấc mơ vậy."}
+
+
+def _morph_ref(src, dst, semitones, tempo, extra):
+    flt = []
+    if abs(semitones) > 0.01:
+        f = 2 ** (semitones / 12.0)
+        flt += ["asetrate=%d" % int(24000 * f), "aresample=24000", "atempo=%.5f" % (1.0 / f)]
+    if abs(tempo - 1.0) > 0.001:
+        flt.append("atempo=%.4f" % tempo)
+    flt += list(extra) + ["alimiter=limit=0.95:level=disabled"]
+    out = _run_ffmpeg(["-i", str(src), "-af", ",".join(flt), "-ac", "1", "-ar", "24000",
+                       "-c:a", "pcm_s16le", "-f", "wav", "pipe:1"])
+    Path(dst).parent.mkdir(parents=True, exist_ok=True)
+    Path(dst).write_bytes(out)
+
+
+def make_morph_styles(name, force=False, say=None):
+    """Tao styles/hype + styles/calm bang cach BIEN DOI mau goc (khong can GPU, ca tieng Viet).
+    Moi muc doc thu 1 cau bang mau moi, cham giong giong ban doc; giu khi >= CLONE_SIM_WARN."""
+    say = say or (lambda *_a: None)
+    name = safe_name(name)
+    d = profile_dir(name)
+    if not (d / "ref.wav").exists():
+        raise ValueError("Không có giọng '%s'." % name)
+    floor = float(_cfg("CLONE_SIM_WARN", 0.80))
+    text = MORPH_TEST_TEXT["vi" if profile_lang(name) == "vi" else "en"]
+    have = available_styles(name)
+    report, made = {}, {}
+    for sty, levels in MORPH_LEVELS.items():
+        if sty in have and not force:
+            report[sty] = {"sim": None, "ok": True, "note": "đã có mẫu — giữ nguyên"}
+            continue
+        sd = d / "styles" / sty
+        best = None
+        meth = dict(profile_meta(name).get("styles_method") or {})
+        _save_meta(name, styles_method=dict(meth, **{sty: "bien_doi"}))   # doc thu dung nhip mau
+        for li, (st, tempo, extra) in enumerate(levels):
+            try:
+                _morph_ref(d / "ref.wav", sd / "ref.wav", st, tempo, extra)
+                shutil.copy2(d / "ref.txt", sd / "ref.txt")
+                wav = synth_cues_clone([text], name, styles=[sty])[0]
+                f = Path(tempfile.mkdtemp(prefix="morph_")) / "t.wav"
+                f.write_bytes(wav)
+                got = _voicesim(_sim_refs(name), [f])
+                shutil.rmtree(f.parent, ignore_errors=True)
+                sim = got[0] if got else None
+            except Exception as e:
+                say("  %s mức %d lỗi: %s" % (sty, li + 1, e))
+                sim = None
+            say("  %s (biến đổi mức %s): giống giọng %s" % (
+                sty, "mạnh" if li == 0 else "nhẹ", "?" if sim is None else "%.0f%%" % (sim * 100)))
+            if sim is not None and sim >= floor:
+                best = (sim, li)
+                break
+        if best:
+            made[sty] = best[0]
+            report[sty] = {"sim": round(best[0], 4), "ok": True,
+                           "note": "đã tạo (biến đổi mức %s)" % ("mạnh" if best[1] == 0 else "nhẹ")}
+        else:
+            shutil.rmtree(sd, ignore_errors=True)
+            _save_meta(name, styles_method={k: v for k, v in meth.items() if k != sty})
+            report[sty] = {"sim": None, "ok": False,
+                           "note": "bỏ — bản đọc dưới %d%% giống giọng, giữ giọng gốc" % round(floor * 100)}
+    if made:
+        m = profile_meta(name)
+        auto = dict(m.get("styles_auto") or {})
+        auto.update({k: round(v, 4) for k, v in made.items()})
+        _save_meta(name, styles=sorted(available_styles(name)), styles_auto=auto)
+    return report
+
+
+def make_styles_auto(name, force=False, say=None):
+    """Tao mau cam xuc bang cach TOT NHAT co tren may: giong Anh + GPU -> Chatterbox;
+    con lai (hoac Chatterbox khong dat) -> bien doi mau goc."""
+    rep = {}
+    if profile_lang(name) == "en" and can_make_styles():
+        try:
+            rep = make_emotion_styles(name, force=force, say=say)
+        except Exception as e:
+            (say or (lambda *_a: None))("  Chatterbox lỗi: %s -> dùng cách biến đổi mẫu" % e)
+    if not rep or not all(r.get("ok") for r in rep.values()):
+        rep2 = make_morph_styles(name, force=False, say=say)
+        rep.update({k: v for k, v in rep2.items() if not (rep.get(k) or {}).get("ok")})
+    return rep
+
+
 def _improve_similarity(name, say=None):
     """Tu NANG DO GIONG: ban nghe thu duoi nguong -> thu cac doan mau ung vien khac
     trong file nguon, giu doan cho ban clone GIONG NHAT (ma van doc dung chu)."""
@@ -782,7 +883,12 @@ def _improve_similarity(name, say=None):
     y = refpick._load(d / "source.wav")
     bak = Path(tempfile.mkdtemp(prefix="simbak_"))
     try:
-        for c in others[:max(0, int(_cfg("CLONE_SIM_TRIES", 2)))]:
+        floor = float(_cfg("CLONE_SIM_WARN", 0.80))
+        n_try = max(0, int(_cfg("CLONE_SIM_TRIES", 2)))
+        for idx, c in enumerate(others):
+            # thu toi da n_try doan; con duoi 80% thi thu TIEP moi doan ung vien con lai
+            if idx >= n_try and best["sim"] >= floor:
+                break
             for f in ("ref.wav", "ref.txt", "sample.wav"):
                 if (d / f).exists():
                     shutil.copy2(d / f, bak / f)
@@ -840,10 +946,9 @@ def _finish_profile(name):
         _improve_similarity(name)          # cham + tu nang do giong giong (khong bat buoc)
     except Exception as e:
         _save_meta(name, sim_error=str(e)[:200])
-    try:                                   # giong Anh chua co mau cam xuc + may GPU -> tu tao
-        if (profile_lang(name) == "en" and not ({"hype", "calm"} & available_styles(name))
-                and can_make_styles()):
-            make_emotion_styles(name)
+    try:                                   # chua co mau cam xuc -> tu tao (Chatterbox / bien doi)
+        if not ({"hype", "calm"} <= available_styles(name)):
+            make_styles_auto(name)
     except Exception as e:
         _save_meta(name, styles_error=str(e)[:200])
     finally:
@@ -1586,6 +1691,9 @@ def style_speed(name, style):
     -> bu lai de nhip doc deu giua cac doan (vd mau hao hung 240 tu/phut vs mau
     chinh 200 -> doan vui bi doc voi, nghe gap)."""
     d = profile_dir(safe_name(name))
+    # mau BIEN DOI: nhanh/cham la CO Y (mot phan cua cam xuc) -> khong bu lai
+    if (profile_meta(safe_name(name)).get("styles_method") or {}).get(style) == "bien_doi":
+        return 1.0
     a = _ref_wpm(d / "ref.wav", d / "ref.txt")
     b = _ref_wpm(d / "styles" / style / "ref.wav", d / "styles" / style / "ref.txt")
     if not a or not b:

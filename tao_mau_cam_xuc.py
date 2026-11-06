@@ -36,12 +36,10 @@ def main(argv):
     want = [a for a in argv if not a.startswith("--")]
     names = [clone.safe_name(n) for n in want] or [
         n for n in clone.list_profiles(include_all_en=True)
-        if clone.profile_lang(n) == "en" and not clone.is_pending(n)
-        and (force or not ({"hype", "calm"} & clone.available_styles(n)))]
+        if not clone.is_pending(n)
+        and (force or not ({"hype", "calm"} <= clone.available_styles(n)))]
     if not clone.can_make_styles():
-        print("[!] Can may co GPU NVIDIA + model Chatterbox (thu muc models_chatterbox).")
-        print("    Chay setup_gpu.py / setup_chatterbox.py truoc, roi chay lai.")
-        return 1
+        print("[i] Khong co GPU/Chatterbox -> dung cach BIEN DOI mau goc (cham hon, cam xuc nhe hon).")
     if not names:
         print("Moi giong tieng Anh deu da co mau cam xuc. Dung --force de tao lai.")
         return 0
@@ -53,7 +51,7 @@ def main(argv):
         print("\n[%d/%d] %s" % (i + 1, len(names), n), flush=True)
         row = {"giong": n}
         try:
-            rep = clone.make_emotion_styles(n, force=force, say=lambda m: print(m, flush=True))
+            rep = clone.make_styles_auto(n, force=force, say=lambda m: print(m, flush=True))
             for sty in ("hype", "calm"):
                 r = rep.get(sty) or {}
                 row[sty] = ("%d%%" % round(r["sim"] * 100)) if r.get("sim") is not None else ""

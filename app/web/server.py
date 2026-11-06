@@ -707,16 +707,14 @@ class Handler(BaseHTTPRequestHandler):
                     p = self._json_body()
                     if p.get("all"):
                         names = [n for n in clone.list_profiles(include_all_en=True)
-                                 if clone.profile_lang(n) == "en" and not clone.is_pending(n)
-                                 and not ({"hype", "calm"} & clone.available_styles(n))]
+                                 if not clone.is_pending(n)
+                                 and not ({"hype", "calm"} <= clone.available_styles(n))]
                     else:
                         names = [clone.safe_name(str(p.get("name", "")))]
                         if names[0] not in clone.list_profiles(include_all_en=True):
                             raise ValueError("Không có giọng '%s'." % names[0])
                     if not names:
-                        raise ValueError("Mọi giọng tiếng Anh đều đã có mẫu cảm xúc.")
-                    if not clone.can_make_styles():
-                        raise ValueError("Cần máy có GPU NVIDIA + model Chatterbox để tự tạo mẫu cảm xúc.")
+                        raise ValueError("Mọi giọng đều đã có mẫu cảm xúc.")
                     job = jobs.start_clone_styles(names, force=bool(p.get("force")))
                     self._send(200, {"ok": True, "job": job["id"], "count": len(names)})
             elif route == "/api/admin/clone_install":

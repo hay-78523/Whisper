@@ -127,7 +127,7 @@
       <button class="btn" id="cl_warm">Nạp sẵn engine</button>
       <button class="btn" id="cl_stopengine">Tắt engine</button>
       <button class="btn" id="cl_recheck">Kiểm tra lại</button>
-      <button class="btn" id="cl_styles_all" title="Chatterbox (GPU) đọc 1 đoạn hào hứng + 1 đoạn trầm bằng chính giọng đó; chỉ giữ mẫu giống giọng gốc từ 85%">Tạo mẫu cảm xúc cho giọng Anh còn thiếu</button>
+      <button class="btn" id="cl_styles_all" title="Tạo mẫu hào hứng + trầm cho giọng còn thiếu: máy GPU dùng Chatterbox (giọng Anh), còn lại biến đổi mẫu gốc. Chỉ giữ mẫu cho bản đọc giống giọng gốc từ 80%">Tạo mẫu cảm xúc cho giọng còn thiếu</button>
       <span id="cl_setupmsg" class="muted" style="font-size:12px"></span>
     </div>
     <pre id="cl_log" class="muted"
@@ -603,8 +603,7 @@
         CL.canAddVoice = d.can_add_voice !== false;
         CL.canMakeStyles = !!d.can_make_styles;
         var sb = document.getElementById('cl_styles_all');
-        sb.disabled = !(CL.canAddVoice && CL.canMakeStyles) || !!CL.stylesJob;
-        sb.title = CL.canMakeStyles ? sb.title : 'Cần máy chủ có GPU NVIDIA + model Chatterbox';
+        sb.disabled = !CL.canAddVoice || !!CL.stylesJob;
         var all = d.profiles || [];
         renderCloneStatus(d);
         renderCloneProfiles(all.filter(function (p) { return p.approval !== 'pending'; }));
@@ -774,7 +773,7 @@
       cell.appendChild(play);
 
       var noEmo = (p.styles || []).indexOf('hype') < 0 && (p.styles || []).indexOf('calm') < 0;
-      if (CL.canAddVoice && CL.canMakeStyles && p.lang === 'en' && noEmo) {
+      if (CL.canAddVoice && noEmo) {
         var mk = document.createElement('button');
         mk.className = 'btn';
         mk.style.marginRight = '8px';
@@ -918,7 +917,8 @@
       .then(function (res) {
         if (!res.ok) { msg.textContent = 'Lỗi: ' + (res.j.error || ''); btn.disabled = false; return; }
         CL.stylesJob = res.j.job;
-        msg.textContent = 'Đang tạo mẫu cảm xúc cho ' + res.j.count + ' giọng (GPU ~1 phút/giọng)…';
+        msg.textContent = 'Đang tạo mẫu cảm xúc cho ' + res.j.count + ' giọng (' +
+          (CL.canMakeStyles ? 'GPU ~1 phút/giọng' : 'không có GPU — chậm, vài phút/giọng') + ')…';
         log.style.display = 'block';
         var iv = setInterval(function () {
           fetch('/api/admin/jobs').then(function (r) { return r.json(); }).then(function (d) {

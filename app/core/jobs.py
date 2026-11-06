@@ -582,7 +582,7 @@ class JobManager(object):
                 for i, n in enumerate(names):
                     say("== %s (%d/%d)" % (n, i + 1, len(names)))
                     try:
-                        results[n] = clone.make_emotion_styles(n, force=force, say=say)
+                        results[n] = clone.make_styles_auto(n, force=force, say=say)
                     except Exception as e:
                         results[n] = {"error": str(e)}
                         say("  lỗi: %s" % e)
