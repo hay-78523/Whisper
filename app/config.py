@@ -6,6 +6,15 @@ Docker / Hugging Face Spaces): WHISPER_DEFAULT_MODEL, WHISPER_USERS.
 """
 
 import os
+from pathlib import Path as _Path
+
+# --- BAN CA NHAN (1 khach, 1 may) ---
+# Bat khi co file PERSONAL canh run.py (dong goi san trong ban ca nhan) hoac WHISPER_PERSONAL=1:
+#   * mo tren CHINH may do -> tu dang nhap (khong can mat khau), may khac van phai dang nhap
+#   * them giong dung ngay (khong qua duyet), /admin thanh trang Cai dat gon
+#     (an nhat ky nhan vien, giong cho duyet, quan ly tai khoan)
+PERSONAL_MODE = (os.environ.get("WHISPER_PERSONAL") == "1"
+                 or (_Path(__file__).resolve().parents[1] / "PERSONAL").is_file())
 
 # --- Web server ---
 DEFAULT_HOST = "127.0.0.1"   # doi thanh "0.0.0.0" khi can truy cap tu may khac trong LAN
@@ -27,6 +36,7 @@ TTS_CHUNK_CHARS = 2500       # do dai moi khuc gui edge-tts
 TTS_CONCURRENCY = 6          # so khuc tao song song
 MAX_TTS_CHARS = 200000       # ~1 cuon truyen vua / lan long tieng
 MAX_UPLOAD_MB = 2000         # tran dung luong file upload (chong day o dia)
+MAX_PENDING_VOICES = 5       # moi nhan vien gui toi da 5 giong cho duyet cung luc
 VIENEU_PRECISION = "fp32"    # chat luong toi da; "int8" = nhanh hon ~1.6x neu may yeu
 import platform
 
@@ -73,7 +83,10 @@ CLONE_WORKER_IDLE_EXIT = 0   # >0 = worker tu tat sau bay nhieu giay khong dung
 
 # --- Chat luong sinh giong ---
 # nfe_step: so buoc khuech tan. 16 = nhanh, 32 = chuan, 48 = min nhat (cham ~1.5x).
-CLONE_NFE_STEP = 16 if platform.system() == "Darwin" else 32
+CLONE_NFE_STEP = 16          # 16 = nhanh & van sach (32 cham gap doi tren CPU)
+CLONE_NFE_STEP_GPU = 32      # may co GPU NVIDIA (sau khi setup_gpu.py bat GPU)
+CLONE_WORKERS = 0            # so worker song song; 0 = tu chon (CPU >=12 luong -> 3)
+CLONE_THREADS_PER_WORKER = 0 # 0 = tu chia deu (i9-13900H 20 luong -> 3 x 6)
 CLONE_CFG_STRENGTH = 2.0     # do "giong mau" — cao qua de bi gat, thap qua thi nhoe
 CLONE_SWAY_SAMPLING = -1.0   # -1 = mac dinh F5, cho phat am on dinh nhat
 CLONE_CROSS_FADE = 0.12      # giay — noi cac khuc ben trong 1 cau cho lien mach
@@ -83,6 +96,7 @@ CLONE_DEVICE = "auto"        # auto | cuda | mps | cpu
 CLONE_LOWERCASE = True       # model ViVoice duoc train chu thuong
 CLONE_MAX_CHARS_PER_CUE = 220  # cau dai hon se tu cat theo dau cau truoc khi doc
 CLONE_RETRY = 1              # so lan doc lai RIENG nhung doan bi loi (khong bo job)
+CLONE_BATCH_ITEMS = 6        # so doan gui worker moi lan (van ban dai 30-40k ky tu duoc chia lo)
 CLONE_FAIL_RATIO = 0.35      # loi vuot ti le nay moi bao that bai ca job
 
 # --- Hau ky am thanh (chay trong tien trinh chinh, thuan Python) ---
@@ -93,31 +107,31 @@ CLONE_POST_MAX_GAIN_DB = 12.0  # khong keo qua tay (tranh keo ca tieng on)
 CLONE_POST_FADE_MS = 10      # fade in/out chong tieng "tach" khi lap track
 
 # --- Mau giong tham chieu (ref) ---
-CLONE_REF_MAX_SEC = 12.0     # F5 dat chat luong tot nhat voi mau 6-12 giay
+CLONE_REF_MAX_SEC = 11.0     # < 12s: mau dai hon F5 tu cat audio nhung GIU script -> doc lan script vao ket qua
 CLONE_REF_MIN_SEC = 3.0      # ngan hon se canh bao
 CLONE_REF_DENOISE = False    # bat neu mau co tieng on nen (co the lam mat hoi)
-CLONE_REF_TRANSCRIBE_MODEL = "small"   # model Whisper dung de tu lay script mau
+CLONE_REF_TRANSCRIBE_MODEL = "large-v3-turbo"  # model Whisper dung de tu lay script mau (chinh xac ca khi co nhac nen)
 CLONE_SR = 24000             # F5 lam viec o 24kHz — khop luon voi track lap rap
 
 # --- Dich "xin" bang AI (tuy chon, nang chat luong dich len muc long tieng chuyen nghiep) ---
 # Lay key MIEN PHI (khong can the) tai https://aistudio.google.com -> "Get API key",
 # roi dien vao giua 2 dau nhay duoi day, hoac dat bien moi truong GEMINI_API_KEY.
 # Bo trong = dung Google Translate nhu binh thuong.
-GEMINI_API_KEYS = "YOUR_GEMINI_KEY_1,YOUR_GEMINI_KEY_2"
-GEMINI_API_KEY = "YOUR_GEMINI_KEY_HERE"
+GEMINI_API_KEYS = ""          # ban khach: KHONG dung API online
+GEMINI_API_KEY = ""
 GEMINI_MODEL = "gemini-3.6-flash"
 
 # --- AI du phong khi Gemini het quota (deu MIEN PHI, tool tu nhay nguon) ---
 # Groq: key free KHONG can the tai https://console.groq.com -> API Keys.
 # Han ~14.400 luot/ngay — gan nhu khong bao gio het.
 # Co the nhap nhieu key cach nhau bang dau phay vao GROQ_API_KEYS (vd: "key1,key2") de xoay vong y het Gemini.
-GROQ_API_KEY = "YOUR_GROQ_KEY_HERE"
-GROQ_API_KEYS = "YOUR_GROQ_KEY_1,YOUR_GROQ_KEY_2"
+GROQ_API_KEY = ""
+GROQ_API_KEYS = ""
 GROQ_MODEL = "openai/gpt-oss-120b"   # model doi thi tool tu do model con song thay the
 # Ollama: AI chay LOCAL vo han, khong can mang — cai tu https://ollama.com
 # roi chay `ollama pull qwen2.5:7b`. Tool TU PHAT HIEN khi Ollama dang mo.
 OLLAMA_URL = "http://localhost:11434"
-OLLAMA_MODEL = ""            # trong = tu dung model dau tien da tai ve
+OLLAMA_MODEL = "qwen2.5:3b"   # AI local mac dinh (setup_ai.py tu tai)
 
 # --- ElevenLabs (tuy chon) — giong TTS hay nhat the gioi, goi free ~10k ky tu/thang ---
 # 1. Dang ky free tai https://elevenlabs.io -> avatar -> API Keys -> tao key, dan vao day.

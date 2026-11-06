@@ -73,7 +73,15 @@
 
     <div id="textmode" style="display:none">
       <div style="margin-bottom: 20px;">
-        <div style="font-size:14px; font-weight:600; color:var(--text); margin-bottom:8px">1. Cài đặt giọng nói cho nhân vật (Bấm + Thêm NV nếu có nhiều người)</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px">
+          <div style="font-size:14px; font-weight:700; color:var(--text)">1. Chọn giọng đọc &amp; phân vai nhân vật</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+            <button type="button" class="btn-studio-add" id="open_vclone_btn" title="Thêm giọng mẫu mới (máy trạm: gửi lên chờ Quản trị duyệt)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Thêm giọng mẫu</span>
+            </button>
+          </div>
+        </div>
         <div class="char-tabs" id="char_tabs"></div>
         <div class="char-gallery-wrap">
           <select id="t_voice" class="vpick-hidden"></select>
@@ -81,14 +89,20 @@
         </div>
       </div>
 
-      <div style="font-size:14px; font-weight:600; color:var(--text); margin-bottom:8px">2. Viết kịch bản &amp; lồng tiếng</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px">
+        <div style="font-size:14px; font-weight:700; color:var(--text)">2. Soạn thảo kịch bản</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button type="button" class="btn" id="demo_vi_emo" style="font-size:12px; padding:6px 12px" title="Điền kịch bản mẫu tự sự tiếng Việt">Kịch bản mẫu: Tự sự</button>
+          <button type="button" class="btn" id="demo_vi_ads" style="font-size:12px; padding:6px 12px" title="Điền kịch bản mẫu quảng cáo tiếng Việt">Kịch bản mẫu: Quảng cáo</button>
+        </div>
+      </div>
       
       <div id="char_insert_bar" class="btnrow" style="margin:0 0 8px">
         <!-- Render from JS -->
       </div>
 
       <div class="btnrow" style="margin:0 0 10px">
-        <button class="btn" id="ai_annotate" title="AI dịch (nếu chọn) + tự gắn thẻ biểu cảm như đạo diễn lồng tiếng">✨ AI biên kịch</button>
+        <button class="btn" id="ai_annotate" title="Tự động phân tích ngữ cảnh và gắn thẻ biểu cảm cho kịch bản">Tự động gắn thẻ</button>
         <button class="btn tagbtn" data-ins="*|*" title="Nhấn mạnh từ đang bôi đen">＊nhấn＊</button>
         <button class="btn tagbtn" data-ins="[vui] ">[vui]</button>
         <button class="btn tagbtn" data-ins="[hào hứng] ">[hào hứng]</button>
@@ -116,13 +130,75 @@
         <button class="btn tagbtn" data-ins="[cười nhẹ] ">[cười nhẹ]</button>
         <button class="btn tagbtn" data-ins="[nghỉ dài] ">[nghỉ dài]</button>
       </div>
+      <details style="margin:0 0 10px"><summary class="muted" style="cursor:pointer;font-size:13px">Bảng thẻ biểu cảm mở rộng (tông giọng, âm thanh, hiệu ứng, tốc độ)</summary>
+      <div class="btnrow" style="margin:6px 0 0">
+        <div style="width:100%;font-size:12px;color:var(--muted);margin:4px 0 2px">Tông giọng (giữ tới thẻ khác):</div>
+          <button class="btn tagbtn" data-ins="[bình tĩnh] " title="[calm]">[bình tĩnh]</button>
+          <button class="btn tagbtn" data-ins="[tự tin] " title="[confident]">[tự tin]</button>
+          <button class="btn tagbtn" data-ins="[lo lắng] " title="[nervous] – giọng run nhẹ">[lo lắng]</button>
+          <button class="btn tagbtn" data-ins="[ngại ngùng] " title="[shy]">[ngại ngùng]</button>
+          <button class="btn tagbtn" data-ins="[thất vọng] " title="[disappointed]">[thất vọng]</button>
+          <button class="btn tagbtn" data-ins="[lãng mạn] " title="[romantic]">[lãng mạn]</button>
+          <button class="btn tagbtn" data-ins="[kịch tính] " title="[dramatic] – chậm, nghỉ dài hơn">[kịch tính]</button>
+          <button class="btn tagbtn" data-ins="[hồi hộp] " title="[suspense]">[hồi hộp]</button>
+          <button class="btn tagbtn" data-ins="[hét] " title="[shout]">[hét]</button>
+          <button class="btn tagbtn" data-ins="[nghẹn ngào] " title="[tearful] – giọng rung">[nghẹn ngào]</button>
+          <button class="btn tagbtn" data-ins="[buồn ngủ] " title="[sleepy]">[buồn ngủ]</button>
+          <button class="btn tagbtn" data-ins="[quảng cáo] " title="[announcer]">[quảng cáo]</button>
+          <button class="btn tagbtn" data-ins="[nhẹ nhõm] " title="[relieved]">[nhẹ nhõm]</button>
+          <button class="btn tagbtn" data-ins="[khó chịu] " title="[annoyed]">[khó chịu]</button>
+          <button class="btn tagbtn" data-ins="[trầm ngâm] " title="[thoughtful]">[trầm ngâm]</button>
+          <button class="btn tagbtn" data-ins="[phản diện] " title="[villain] – giọng trầm hẳn">[phản diện]</button>
+          <button class="btn tagbtn" data-ins="[trẻ con] " title="[child] – giọng cao">[trẻ con]</button>
+          <button class="btn tagbtn" data-ins="[già] " title="[old] – giọng run">[già]</button>
+          <button class="btn tagbtn" data-ins="[nghi ngờ] " title="[suspicious]">[nghi ngờ]</button>
+          <button class="btn tagbtn" data-ins="[tinh nghịch] " title="[playful]">[tinh nghịch]</button>
+        <div style="width:100%;font-size:12px;color:var(--muted);margin:4px 0 2px">Âm thanh chèn vào:</div>
+          <button class="btn tagbtn" data-ins="[há hốc] " title="[gasp] Hah!">[há hốc]</button>
+          <button class="btn tagbtn" data-ins="[hét lên] " title="[scream] Aaaah!">[hét lên]</button>
+          <button class="btn tagbtn" data-ins="[ngáp] " title="[yawn]">[ngáp]</button>
+          <button class="btn tagbtn" data-ins="[hừm] " title="[hmm]">[hừm]</button>
+          <button class="btn tagbtn" data-ins="[ồ] " title="[oh]">[ồ]</button>
+          <button class="btn tagbtn" data-ins="[ối] " title="[ouch]">[ối]</button>
+          <button class="btn tagbtn" data-ins="[yeah] " title="[yay]">[yeah]</button>
+          <button class="btn tagbtn" data-ins="[hả] " title="[huh]">[hả]</button>
+          <button class="btn tagbtn" data-ins="[phù] " title="[phew]">[phù]</button>
+          <button class="btn tagbtn" data-ins="[hừ] " title="[ugh]">[hừ]</button>
+          <button class="btn tagbtn" data-ins="[úi] " title="[oops]">[úi]</button>
+          <button class="btn tagbtn" data-ins="[ôi chao] " title="[aww]">[ôi chao]</button>
+          <button class="btn tagbtn" data-ins="[ừ hử] " title="[mm-hmm]">[ừ hử]</button>
+        <div style="width:100%;font-size:12px;color:var(--muted);margin:4px 0 2px">Hiệu ứng âm thanh (giữ tới [không hiệu ứng] hoặc [bình thường]):</div>
+          <button class="btn tagbtn" data-ins="[điện thoại] " title="[phone]">[điện thoại]</button>
+          <button class="btn tagbtn" data-ins="[radio] " title="[radio]">[radio]</button>
+          <button class="btn tagbtn" data-ins="[vang] " title="[echo]">[vang]</button>
+          <button class="btn tagbtn" data-ins="[hội trường] " title="[hall]">[hội trường]</button>
+          <button class="btn tagbtn" data-ins="[hang động] " title="[cave]">[hang động]</button>
+          <button class="btn tagbtn" data-ins="[robot] " title="[robot]">[robot]</button>
+          <button class="btn tagbtn" data-ins="[loa] " title="[megaphone]">[loa]</button>
+          <button class="btn tagbtn" data-ins="[nội tâm] " title="[thought] – giọng suy nghĩ trong đầu">[nội tâm]</button>
+          <button class="btn tagbtn" data-ins="[xa] " title="[distant]">[xa]</button>
+          <button class="btn tagbtn" data-ins="[không hiệu ứng] " title="[no effect] – tắt hiệu ứng">[không hiệu ứng]</button>
+        <div style="width:100%;font-size:12px;color:var(--muted);margin:4px 0 2px">Tốc độ / âm lượng (cộng dồn, hết khi [bình thường]):</div>
+          <button class="btn tagbtn" data-ins="[chậm] " title="[slow]">[chậm]</button>
+          <button class="btn tagbtn" data-ins="[rất chậm] " title="[very slow]">[rất chậm]</button>
+          <button class="btn tagbtn" data-ins="[nhanh] " title="[fast]">[nhanh]</button>
+          <button class="btn tagbtn" data-ins="[rất nhanh] " title="[very fast]">[rất nhanh]</button>
+          <button class="btn tagbtn" data-ins="[to] " title="[loud]">[to]</button>
+          <button class="btn tagbtn" data-ins="[nhỏ] " title="[quiet]">[nhỏ]</button>
+          <button class="btn tagbtn" data-ins="[bình thường] " title="[normal] – về giọng gốc, tắt hết">[bình thường]</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:4px">Hỗ trợ cả thẻ tiếng Anh: [happy] [sad] [whisper] [pause] [laugh] [phone] [echo] [slow]…</div>
+      </details>
 
-      <textarea id="ttext" placeholder="Dán hoặc gõ văn bản… Gắn thẻ biểu cảm bằng nút bên trên, hoặc bấm ✨ AI biên kịch để máy tự gắn. Ví dụ: [kể chuyện] Ngày xưa… [nghỉ] có một chàng trai *rất đặc biệt*. [cười nhẹ]"
+      <textarea id="ttext" placeholder="Nhập hoặc dán kịch bản tại đây. Chọn thẻ biểu cảm phía trên hoặc đặt dấu *từ nhấn* quanh cụm từ cần nhấn mạnh. Ví dụ: [kể chuyện] Ngày xưa, [nghỉ] có một câu chuyện *rất đặc biệt*."
                 style="width:100%;min-height:320px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:11px;padding:14px;font-size:14px;line-height:1.75;font-family:var(--font)"></textarea>
-      <div class="muted" style="font-size:12px;margin-top:6px">Bấm nút nhân vật để chuyển người nói. Không thẻ → đọc thường như cũ.</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">Bấm nút nhân vật để chuyển đổi người nói trong kịch bản nhiều vai.</div>
       <div class="opts">
-        <label class="opt">Dịch sang
+        <label class="opt" style="display:none">Dịch sang
           <select id="t_target"><option value="">Không dịch — đọc nguyên văn</option></select>
+        </label>
+        <label class="opt" title="Giọng điệu theo thể loại video: tông nền, tốc độ, ngắt nghỉ">Thể loại
+          <select id="t_genre"><option value="">Tự động (AI nhận diện)</option></select>
         </label>
         <label class="opt">Tốc độ
           <select id="t_rate">
@@ -132,7 +208,7 @@
           </select>
         </label>
       </div>
-      <button id="tgo" disabled>Dịch &amp; tạo giọng đọc</button>
+      <button id="tgo" disabled>Tạo giọng đọc</button>
       <div id="t_status" style="margin-top:14px;font-size:14px;color:var(--muted);display:none"></div>
       <div id="t_result" style="display:none;margin-top:16px">
         <div class="tabs" style="margin-bottom:10px" id="t_transwrap">
@@ -188,6 +264,84 @@
   </div>
 </div>
 
+<!-- HOP THOAI TAO HO SO GIONG MAU (may chu: tao ngay · may tram: gui cho duyet) -->
+<div id="vclone_modal" class="vclone-overlay">
+  <div class="vclone-dialog">
+    <div class="vclone-head">
+      <div>
+        <div class="vclone-title">Thêm hồ sơ giọng mẫu</div>
+        <div class="vclone-sub">Trích xuất mẫu giọng chuẩn từ file video hoặc âm thanh (khuyến nghị 15 giây – 3 phút, một người nói rõ).</div>
+      </div>
+      <button type="button" class="btn" id="vc_close" style="padding:7px 14px; font-size:12.5px">Đóng</button>
+    </div>
+
+    <div class="vclone-grid">
+      <label class="vclone-field">Tên hồ sơ giọng
+        <input id="vc_name" class="inp" placeholder="VD: mc_minh_anh">
+      </label>
+      <label class="vclone-field">Ngôn ngữ
+        <select id="vc_lang" class="inp">
+          <option value="vi" selected>Tiếng Việt</option>
+          <option value="en">Tiếng Anh</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="vc_drop" class="vclone-drop">
+      <div class="vclone-drop-title">Chọn file nguồn hoặc kéo thả vào đây</div>
+      <div class="vclone-drop-hint">Định dạng hỗ trợ: MP4, MOV, MKV, WAV, MP3, M4A, FLAC</div>
+      <div id="vc_fileinfo" class="vclone-filebadge"></div>
+      <input type="file" id="vc_file" accept="video/*,audio/*,.mp4,.mov,.mkv,.webm,.m4a,.mp3,.wav,.flac" hidden>
+    </div>
+
+    <div id="vc_preview_wrap" class="vclone-preview">
+      <div style="font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:8px">Giới hạn đoạn trích xuất (tùy chọn)</div>
+      <video id="vc_video" controls style="width:100%; max-height:210px; border-radius:10px; display:none; background:#000"></video>
+      <audio id="vc_audio" controls style="width:100%; display:none"></audio>
+      <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-top:12px">
+        <div style="flex:1; min-width:140px">
+          <div class="muted" style="font-size:11.5px; margin-bottom:4px">Điểm đầu (giây)</div>
+          <div style="display:flex; gap:6px">
+            <input id="vc_start" class="inp" type="number" step="0.5" min="0" placeholder="0.0" style="width:100%; padding:8px 10px">
+            <button type="button" class="btn" id="vc_mark_start" style="font-size:11.5px; padding:6px 10px; white-space:nowrap">Lấy mốc</button>
+          </div>
+        </div>
+        <div style="flex:1; min-width:140px">
+          <div class="muted" style="font-size:11.5px; margin-bottom:4px">Điểm cuối (giây)</div>
+          <div style="display:flex; gap:6px">
+            <input id="vc_end" class="inp" type="number" step="0.5" min="0" placeholder="Hết file" style="width:100%; padding:8px 10px">
+            <button type="button" class="btn" id="vc_mark_end" style="font-size:11.5px; padding:6px 10px; white-space:nowrap">Lấy mốc</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px">
+      <label style="display:flex; align-items:center; gap:10px; font-size:13px; font-weight:600; cursor:pointer">
+        <input type="checkbox" id="vc_denoise" checked>
+        <span>Tách lời thoại và khử nhạc nền tự động</span>
+      </label>
+    </div>
+
+    <details style="margin-bottom:18px">
+      <summary class="muted" style="font-size:12px; cursor:pointer">Nhập lời thoại mẫu thủ công (bỏ trống để hệ thống tự nhận diện)</summary>
+      <input id="vc_ref_text" class="inp" placeholder="Chỉ nhập khi file mẫu ngắn dưới 10 giây và biết chính xác từng từ" style="width:100%; margin-top:8px">
+    </details>
+
+    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap">
+      <button type="button" id="vc_submit" class="btn btn-studio-primary" disabled>
+        Tạo hồ sơ giọng
+      </button>
+      <span id="vc_hint" class="muted" style="font-size:12.5px">Chưa chọn file nguồn</span>
+    </div>
+    <div id="vc_pending_note" class="muted" style="display:none; font-size:12px; margin-top:8px">
+      Giọng gửi từ máy trạm sẽ ở trạng thái <b>chờ duyệt</b>. Chỉ khi Quản trị duyệt trên máy chủ thì giọng mới hiện trong danh sách chọn giọng của mọi người.
+    </div>
+
+    <div id="vc_status" class="vclone-status"></div>
+  </div>
+</div>
+
 <script>
 (function () {
   var drop = document.getElementById('drop');
@@ -206,22 +360,38 @@
   var view = 'trans';
   var langVoice = {}, langLabel = {};
 
-  // ---------- phien dang nhap ----------
+  // ---------- phien dang nhap & phan quyen may chu ----------
   fetch('/api/me').then(function (r) {
     if (r.status === 401) { location.href = '/login'; throw new Error('401'); }
     return r.json();
   }).then(function (me) {
     var el = document.getElementById('who');
-    el.innerHTML = (me.role === 'admin'
-        ? '<a href="/admin" class="menu-link">Quản trị</a>' : '') +
-      '<span class="menu-user">@' + me.user + '</span><a href="#" id="logoutlink" class="menu-link">Thoát</a>';
-    document.getElementById('logoutlink').addEventListener('click', function (e) {
+    var roleText = me.role === 'admin' ? (me.is_host ? 'Máy chủ · Quản trị' : 'Quản trị') : 'Nhân viên';
+    el.innerHTML =
+      '<span class="menu-user">' + esc(me.user) + '</span>' +
+      '<span class="muted" style="font-size:12px; font-weight:600">' + roleText + '</span>' +
+      (me.role === 'admin' ? '<a href="/admin" class="menu-link">' + (me.personal ? 'Cài đặt' : 'Quản trị hệ thống') + '</a>' : '') +
+      // ban ca nhan tu dang nhap tren may nay -> khong can nut dang xuat
+      (me.auto_login ? '' : '<a href="#" id="logoutlink" class="menu-link">Đăng xuất</a>');
+    if (me.auto_login) el.querySelector('.muted').textContent = 'Bản cá nhân';
+    var openVcBtn = document.getElementById('open_vclone_btn');
+    if (openVcBtn) {
+      openVcBtn.style.display = (me.can_add_voice || me.can_submit_voice) ? 'inline-flex' : 'none';
+    }
+    // khong phai Quan tri tren may chu -> giong gui len phai cho duyet
+    window._vcNeedsApproval = !me.can_add_voice;
+    var pn = document.getElementById('vc_pending_note');
+    if (pn) pn.style.display = me.can_add_voice ? 'none' : 'block';
+    var vs = document.getElementById('vc_submit');
+    if (vs && !me.can_add_voice) vs.textContent = 'Gửi giọng chờ duyệt';
+    var lo = document.getElementById('logoutlink');
+    if (lo) lo.addEventListener('click', function (e) {
       e.preventDefault();
       fetch('/api/logout', { method: 'POST' }).then(function () { location.href = '/login'; });
     });
   }).catch(function () {});
   var _charVoices = {};   // cached voice data
-  var _charList = [{ name: 'Nhân vật 1', voice: 'edge:vi-VN-HoaiMyNeural' }]; // Mac dinh co 1 nhan vat
+  var _charList = [{ name: 'Nhân vật 1', voice: 'c:ray' }]; // Mac dinh co 1 nhan vat
   var _activeCharIdx = 0; 
 
   function _renderChars() {
@@ -314,7 +484,7 @@
         var btn = document.createElement('button');
         btn.className = 'btn tagbtn';
         btn.style.cssText = 'background: #fcf4e3; border-color: #f7d598; color: #b87c14; font-weight:600';
-        btn.innerHTML = '🗣 ' + ch.name;
+        btn.textContent = ch.name;
         btn.onclick = function() {
           var ins = '\\n[giọng:' + ch.voice + '] ';
           var ttext = document.getElementById('ttext');
@@ -697,6 +867,7 @@
 
   // ---------- giong + ngon ngu ----------
   function fillVoices(sel, v) {
+    sel.innerHTML = '';
     (v.groups || [{ label: null, voices: v.voices }]).forEach(function (g) {
       var parent = sel;
       if (g.label) {
@@ -712,40 +883,26 @@
     });
   }
 
-  fetch('/api/voices').then(function (r) { return r.json(); }).then(function (v) {
-    fillVoices(document.getElementById('voice'), v);
-    var tsel = document.getElementById('translate');
-    (v.languages || []).forEach(function (x) {
-      var o = document.createElement('option');
-      o.value = x.code; o.textContent = 'Dịch sang ' + x.label;
-      tsel.appendChild(o);
-      langLabel[x.code] = x.label;
-    });
-    langVoice = v.lang_voice || {};
-    tsel.value = 'en';           // mac dinh: dich sang tieng Anh
-    syncVoice();
-    // do day select cua che do Van ban
-    fillVoices(document.getElementById('t_voice'), v);
-    _charVoices = v;   // luu cho panel nhan vat
-    var tt = document.getElementById('t_target');
-    (v.languages || []).forEach(function (x) {
-      var o = document.createElement('option');
-      o.value = x.code; o.textContent = 'Dịch sang ' + x.label;
-      tt.appendChild(o);
-    });
-    tt.value = 'en';
-    var tv = document.getElementById('t_voice');
-    if (langVoice['en']) { 
-        tv.value = langVoice['en'];
-        if (_charList.length > 0) _charList[0].voice = langVoice['en'];
-    }
-    initPicker('voice', 'vp_voice', v);
-    initPicker('t_voice', 'vp_t', v);
-    _renderChars();
-    tt.addEventListener('change', function () {
-      if (this.value && langVoice[this.value]) { tv.value = langVoice[this.value]; _vpRefresh('t_voice'); }
-    });
-  }).catch(function () {});
+  function loadVoices(selectVoiceId) {
+    return fetch('/api/voices').then(function (r) { return r.json(); }).then(function (v) {
+      fillVoices(document.getElementById('voice'), v);
+      var tsel = document.getElementById('translate');
+      langVoice = v.lang_voice || {};
+      syncVoice();
+      fillVoices(document.getElementById('t_voice'), v);
+      _charVoices = v;   // luu cho panel nhan vat
+      var tv = document.getElementById('t_voice');
+      var picked = selectVoiceId || (v.voices && v.voices[0] ? v.voices[0].id : 'c:ray');
+      if (picked) {
+        tv.value = picked;
+        if (_charList.length > 0) _charList[_activeCharIdx >= 0 ? _activeCharIdx : 0].voice = picked;
+      }
+      initPicker('voice', 'vp_voice', v);
+      initPicker('t_voice', 'vp_t', v);
+      _renderChars();
+    }).catch(function () {});
+  }
+  loadVoices();
 
   // ---------- chuyen che do File / Van ban ----------
   function setMode(text) {
@@ -767,11 +924,198 @@
   }
   document.getElementById('mode_file').addEventListener('click', function () { setMode(false); });
   document.getElementById('mode_text').addEventListener('click', function () { setMode(true); });
+  // BAN KHACH: bo phan xu ly Audio/Video -> chi con Soan thao kich ban
+  (function () {
+    var tabs = document.querySelector('.tabs-porsche'); if (tabs) tabs.style.display = 'none';
+    var r = document.getElementById('result'); if (r) r.style.display = 'none';
+    setMode(true);
+  })();
 
   // ---------- che do Van ban: dich + doc ----------
   var ttext = document.getElementById('ttext');
   var tgo = document.getElementById('tgo');
   ttext.addEventListener('input', function () { tgo.disabled = !ttext.value.trim(); });
+
+  // ---------- Kich ban mau Cam xuc Tieng Viet de test ----------
+  var demoEmoBtn = document.getElementById('demo_vi_emo');
+  if (demoEmoBtn) {
+    demoEmoBtn.addEventListener('click', function () {
+      ttext.value =
+        '[kể chuyện] Ngày 26/10/2026, lúc 14h30 chiều, khi cơn mưa vừa kịp tạnh trên những con phố nhỏ, ' +
+        'tôi tình cờ nghe lại đoạn thu âm cũ mà suốt *3 năm qua* mình chưa từng dám mở. [nghỉ] ' +
+        '[nghẹn ngào] Có những lời hứa tưởng chừng rất bình thường, nhưng lại khiến người ta nhớ mãi không quên... ' +
+        '[nghỉ dài] [hào hứng] Nhưng hôm nay, mọi thứ đã hoàn toàn thay đổi! Chỉ với 150.000đ và *98,5%* độ chính xác, ' +
+        'chúng ta đã có thể tái hiện trọn vẹn từng nhịp thở và cảm xúc chân thật nhất!';
+      tgo.disabled = false;
+      ttext.focus();
+    });
+  }
+  var demoAdsBtn = document.getElementById('demo_vi_ads');
+  if (demoAdsBtn) {
+    demoAdsBtn.addEventListener('click', function () {
+      ttext.value =
+        '[hào hứng] Anh em ơi, tin được không! [vui] Chỉ trong vòng 15 giây từ một video bất kỳ, ' +
+        'hệ thống đã tách sạch nhạc nền và nhân bản giọng nói *giống đến 99%*! [nghỉ] ' +
+        '[tự tin] Dù là kịch bản đọc số tiền 2.500.000đ, khung giờ 20h15, hay những đoạn [thì thầm] tâm sự nhỏ nhẹ nhất, ' +
+        '[quảng cáo] tất cả đều chạy trực tiếp trên GPU máy trạm của bạn với *0 giây* chờ hàng đợi!';
+      tgo.disabled = false;
+      ttext.focus();
+    });
+  }
+
+  // ---------- HOP THOAI TAO HO SO GIONG MAU ----------
+  (function () {
+    var modal = document.getElementById('vclone_modal');
+    var openBtn = document.getElementById('open_vclone_btn');
+    var closeBtn = document.getElementById('vc_close');
+    var vcDrop = document.getElementById('vc_drop');
+    var vcFile = document.getElementById('vc_file');
+    var vcFileInfo = document.getElementById('vc_fileinfo');
+    var vcName = document.getElementById('vc_name');
+    var vcLang = document.getElementById('vc_lang');
+    var vcPreviewWrap = document.getElementById('vc_preview_wrap');
+    var vcVideo = document.getElementById('vc_video');
+    var vcAudio = document.getElementById('vc_audio');
+    var vcStart = document.getElementById('vc_start');
+    var vcEnd = document.getElementById('vc_end');
+    var vcDenoise = document.getElementById('vc_denoise');
+    var vcRefText = document.getElementById('vc_ref_text');
+    var vcSubmit = document.getElementById('vc_submit');
+    var vcHint = document.getElementById('vc_hint');
+    var vcStatus = document.getElementById('vc_status');
+    var pickedMedia = null;
+    var activePlayer = null;
+    var pollTimer = null;
+
+    if (!modal || !openBtn) return;
+
+    function openModal() { modal.style.display = 'block'; }
+    function closeModal() {
+      modal.style.display = 'none';
+      if (vcVideo) vcVideo.pause();
+      if (vcAudio) vcAudio.pause();
+    }
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+
+    function selectMedia(f) {
+      if (!f) return;
+      pickedMedia = f;
+      var isVid = /\.(mp4|mov|mkv|webm|avi|flv|m4v|ts)$/i.test(f.name) || (f.type && f.type.indexOf('video/') === 0);
+      vcFileInfo.style.display = 'inline-block';
+      vcFileInfo.textContent = (isVid ? 'Video: ' : 'Audio: ') + f.name + ' (' + (f.size / 1e6).toFixed(1) + ' MB)';
+      if (!vcName.value.trim()) {
+        vcName.value = f.name.replace(/\.[^.]+$/, '').slice(0, 24);
+      }
+      vcDenoise.checked = isVid;
+      vcSubmit.disabled = false;
+      vcHint.textContent = isVid ? 'Đã chọn file video — tự động tách đường tiếng' : 'Đã chọn file âm thanh mẫu';
+      vcPreviewWrap.style.display = 'block';
+      var url = URL.createObjectURL(f);
+      if (isVid) {
+        vcAudio.style.display = 'none'; vcAudio.pause();
+        vcVideo.style.display = 'block'; vcVideo.src = url;
+        activePlayer = vcVideo;
+      } else {
+        vcVideo.style.display = 'none'; vcVideo.pause();
+        vcAudio.style.display = 'block'; vcAudio.src = url;
+        activePlayer = vcAudio;
+      }
+    }
+
+    vcDrop.addEventListener('click', function () { vcFile.click(); });
+    vcFile.addEventListener('change', function () { selectMedia(vcFile.files[0]); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      vcDrop.addEventListener(ev, function (e) { e.preventDefault(); vcDrop.classList.add('over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      vcDrop.addEventListener(ev, function (e) { e.preventDefault(); vcDrop.classList.remove('over'); });
+    });
+    vcDrop.addEventListener('drop', function (e) { selectMedia(e.dataTransfer.files[0]); });
+
+    document.getElementById('vc_mark_start').addEventListener('click', function () {
+      if (activePlayer && activePlayer.currentTime >= 0) vcStart.value = activePlayer.currentTime.toFixed(1);
+    });
+    document.getElementById('vc_mark_end').addEventListener('click', function () {
+      if (activePlayer && activePlayer.currentTime > 0) vcEnd.value = activePlayer.currentTime.toFixed(1);
+    });
+
+    function pollProfileReady(profName) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(function () {
+        fetch('/api/clone_profile_info?name=' + encodeURIComponent(profName))
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var p = d.profile;
+            if (!p) return;
+            if (p.state === 'processing') {
+              vcStatus.innerHTML = '<span class="spinner"></span>Đang phân tích ngữ điệu mẫu (' + (p.lang === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh') +
+                ') và khởi tạo bản nghe thử…';
+              return;
+            }
+            clearInterval(pollTimer);
+            vcSubmit.disabled = false;
+            if (p.approval === 'pending') {
+              vcStatus.innerHTML =
+                '<div style="font-weight:700; color:var(--text)">Đã gửi giọng <code>' + esc(p.name) + '</code> — đang chờ Quản trị duyệt.</div>' +
+                (p.error ? '<div style="margin-top:4px; color:var(--err, #e53e3e); font-size:12px">' + esc(p.error) + '</div>' : '') +
+                (p.has_sample ? '<div style="margin-top:10px"><audio controls src="/api/clone_test_audio?name=' + encodeURIComponent(p.name) + '&t=' + Date.now() + '" style="width:100%; height:36px"></audio></div>' : '') +
+                '<div style="margin-top:6px; font-size:12px; color:var(--muted)">Sau khi được duyệt, giọng sẽ hiện trong danh sách chọn giọng.</div>';
+              return;
+            }
+            var stBadges = ['Mẫu chính'];
+            if ((p.styles || []).indexOf('hype') >= 0) stBadges.push('Hào hứng');
+            if ((p.styles || []).indexOf('calm') >= 0) stBadges.push('Trầm dịu');
+            var alts = (p.styles || []).filter(function (s) { return s.indexOf('alt') === 0; });
+            if (alts.length) stBadges.push('+' + alts.length + ' mẫu phụ');
+            var matchTxt = (p.voice_sim != null ? (' · giống giọng ' + Math.round(p.voice_sim * 100) + '%') : '') +
+              (p.sample_match != null ? (' · đọc đúng chữ ' + Math.round(p.sample_match * 100) + '%') : '');
+            vcStatus.innerHTML =
+              '<div style="font-weight:700; color:var(--text)">Đã lưu hồ sơ giọng: <code>' + esc(p.name) + '</code> (' + (p.lang === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh') + matchTxt + ')</div>' +
+              '<div style="margin-top:4px; font-size:12px; color:var(--muted)">Sắc thái trích xuất: <b>' + stBadges.join(' · ') + '</b></div>' +
+              (p.ref_text ? '<div class="muted" style="margin-top:4px; font-size:12px">Lời thoại mẫu: <i>"' + esc(p.ref_text) + '"</i></div>' : '') +
+              (p.has_sample ? '<div style="margin-top:10px"><audio controls autoplay src="/api/clone_test_audio?name=' + encodeURIComponent(p.name) + '&t=' + Date.now() + '" style="width:100%; height:36px"></audio></div>' : '') +
+              '<div style="margin-top:6px; font-size:12px; color:var(--muted)">Hồ sơ giọng <b>' + esc(p.name) + '</b> đã được chọn trên bàn làm việc.</div>';
+            loadVoices('c:' + p.name);
+          })
+          .catch(function () {});
+      }, 1500);
+    }
+
+    vcSubmit.addEventListener('click', function () {
+      if (!pickedMedia) return;
+      var name = vcName.value.trim();
+      if (!name) { alert('Vui lòng nhập tên cho hồ sơ giọng (VD: mc_minh_anh)'); vcName.focus(); return; }
+      vcSubmit.disabled = true;
+      vcStatus.style.display = 'block';
+      vcStatus.innerHTML = '<span class="spinner"></span>Đang tách đường tiếng và xử lý tín hiệu âm thanh…';
+      var qs = '/api/clone_add?name=' + encodeURIComponent(name) +
+        '&filename=' + encodeURIComponent(pickedMedia.name) +
+        '&lang=' + encodeURIComponent(vcLang.value) +
+        '&denoise=' + (vcDenoise.checked ? '1' : '0') +
+        '&trim_start=' + encodeURIComponent(vcStart.value || '') +
+        '&trim_end=' + encodeURIComponent(vcEnd.value || '') +
+        '&ref_text=' + encodeURIComponent(vcRefText.value || '');
+      fetch(qs, { method: 'POST', body: pickedMedia })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.j.error || 'Không thể tạo hồ sơ giọng');
+          var prof = res.j.profile;
+          if (!res.j.pending) loadVoices('c:' + prof.name);
+          if (prof.state === 'processing') {
+            vcStatus.innerHTML = '<span class="spinner"></span>Đã trích xuất mẫu (' + (prof.duration || 0) + 's). Đang phân tích sắc thái và tạo bản nghe thử…';
+            pollProfileReady(prof.name);
+          } else {
+            pollProfileReady(prof.name);
+          }
+        })
+        .catch(function (e) {
+          vcSubmit.disabled = false;
+          vcStatus.innerHTML = '<span style="color:var(--err, #e53e3e)">Lỗi: ' + esc(e.message) + '</span>';
+        });
+    });
+  })();
 
   // ---- thanh cong cu bieu cam ----
   document.querySelectorAll('.tagbtn').forEach(function (b) {
@@ -791,6 +1135,13 @@
       tgo.disabled = !ttext.value.trim();
     });
   });
+
+  fetch('/api/genres').then(function (r) { return r.json(); }).then(function (d) {
+    var gsel = document.getElementById('t_genre');
+    (d.genres || []).forEach(function (g) {
+      var o = document.createElement('option'); o.value = g.id; o.textContent = g.label; gsel.appendChild(o);
+    });
+  }).catch(function () {});
 
   document.getElementById('ai_annotate').addEventListener('click', function () {
     var btn = this;
@@ -812,15 +1163,27 @@
         if (j.state !== 'done') { st.innerHTML = '❌ ' + (j.error || 'Lỗi không rõ'); return; }
         ttext.value = j.result.text;
         document.getElementById('t_target').value = '';   // ban trong o da la ban cuoi
+        // AI doan the loai -> tu chon san (nguoi dung doi lai duoc)
+        var rp = j.result.report || {}, gsel = document.getElementById('t_genre');
+        var gname = '';
+        if (rp.genre && gsel) {
+          if (!gsel.value) gsel.value = rp.genre;
+          var go = gsel.querySelector('option[value="' + rp.genre + '"]');
+          gname = go ? go.textContent : rp.genre;
+        }
+        // bao loi ro rang: phan nao dung ban nhanh, vi sao, cach khac phuc
         st.innerHTML = j.result.note
-          ? '⚠️ ' + j.result.note + ' Duyệt/sửa rồi bấm tạo giọng.'
-          : 'AI đã gắn thẻ xong — duyệt/sửa rồi bấm "Dịch & tạo giọng đọc".';
+          ? '<div style="color:#b45309">⚠️ ' + esc(j.result.note) + '</div>' +
+            '<div style="margin-top:4px">Kịch bản vẫn dùng được — duyệt/sửa rồi bấm tạo giọng.</div>'
+          : 'AI đã gắn thẻ xong' + (gname ? ' (thể loại: <b>' + esc(gname) + '</b>)' : '') +
+            ' — duyệt/sửa rồi bấm "Dịch & tạo giọng đọc".';
         tgo.disabled = false;
       }).catch(function (e) { btn.disabled = false; st.innerHTML = '❌ ' + e.message; });
     }
     fetch('/api/annotate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text, target: document.getElementById('t_target').value })
+      body: JSON.stringify({ text: text, target: document.getElementById('t_target').value,
+                             genre: document.getElementById('t_genre').value })
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.j.error || 'Lỗi không rõ');
@@ -845,7 +1208,8 @@
       body: JSON.stringify({
         text: ttext.value, target: target,
         voice: document.getElementById('t_voice').value,
-        rate: document.getElementById('t_rate').value
+        rate: document.getElementById('t_rate').value,
+        genre: document.getElementById('t_genre').value
       })
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {

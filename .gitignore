@@ -16,3 +16,28 @@ data/clone_settings.json
 data/clone_python.txt
 data/logs/
 data/previews/
+
+# ban giao Windows V4
+python/
+_build_v4/
+ffmpeg-master-latest-win64-gpl-shared/
+data/hf_cache/
+BAN_GIAO_KHACH/
+torch_gpu/
+torch_gpu_*.tmp/
+ollama/
+ollama.tmp/
+ollama-windows-amd64.zip*
+data/ollama_models/
+
+# model nang + du lieu thu nghiem (khong dua vao git)
+models_chatterbox/
+Claude outputs/
+so_sanh_elevenlabs/
+:memory:*
+test_voices/
+mau_cam_xuc/
+/ElevenLabs_*.mp3
+/voice_preview_*.mp3
+# file bat ban ca nhan chi nam trong goi zip ban whisper
+/PERSONAL

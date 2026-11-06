@@ -132,8 +132,32 @@ def verify(username, password):
     return None
 
 
+MAX_STAFF_USERS = int(os.environ.get("ENTERPRISE_MAX_STAFF", "3") or 3)
+
+
+def first_admin():
+    """Tai khoan quan tri dau tien (ban ca nhan tu dang nhap bang tai khoan nay)."""
+    ensure_default()
+    for n, u in sorted(_load().items()):
+        if u.get("role") == "admin":
+            return n
+    return None
+
+
 def list_users():
     return [{"username": n, "role": u["role"]} for n, u in sorted(_load().items())]
+
+
+def quota_info():
+    users = _load()
+    staff = sum(1 for u in users.values() if u.get("role") == "user")
+    admins = sum(1 for u in users.values() if u.get("role") == "admin")
+    return {
+        "max_staff": MAX_STAFF_USERS,
+        "staff_count": staff,
+        "admin_count": admins,
+        "total": len(users),
+    }
 
 
 def add_user(username, password, role):
@@ -148,6 +172,11 @@ def add_user(username, password, role):
         users = _load()
         if username in users:
             raise ValueError("Tên tài khoản đã tồn tại.")
+        if role == "user":
+            staff_count = sum(1 for u in users.values() if u.get("role") == "user")
+            if staff_count >= MAX_STAFF_USERS:
+                raise ValueError("Đã đạt giới hạn %d tài khoản nhân viên của gói Doanh Nghiệp."
+                                 % MAX_STAFF_USERS)
         salt = secrets.token_hex(16)
         users[username] = {"salt": salt, "hash": _hash(password, salt), "role": role}
         _save(users)

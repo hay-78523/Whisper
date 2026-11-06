@@ -1,0 +1,60 @@
+BANG THE BIEU CAM - GIONG CLONE (viet the tieng Viet HOAC tieng Anh deu duoc)
+==========================================================================
+Dat the TRUOC cau. The tong giong / hieu ung / toc do GIU NGUYEN cho toi khi
+gap the khac. [binh thuong] / [normal] = ve giong goc, tat het hieu ung.
+LUU Y: cac tong giong GIU NGUYEN giong nhan vat. Giong co "mau cam xuc" (ray, va
+giong them bang file dai 1-3 phut - /admin ghi "cam xuc: hao hung / tram") se doc
+cau vui/hao hung bang doan GIONG THAT dang soi noi, cau buon/diu dang bang doan
+giong that dang tram -> bieu cam ro. Giong chi co mau ngan: doi nhe toc do, am
+luong, dau cau, ngat nghi. Rieng [phan dien] [tre con] [gia] co y DOI GIONG.
+MEO DOC TU NHIEN NHAT:
+ - Khong gan the cung duoc: giong co nhieu mau (ray) tu xoay vong mau de doc
+   bot don dieu. Xuong dong trong (de 1 dong trong) giua cac doan = ngat chuyen y.
+ - Chi dat the khi TONG GIONG DOI (1 the cho ca doan), dung dat the tung cau
+   hay giua cau - cat vun thanh nhieu doan ngan lam giong doc roi rac, de loi.
+
+1) TONG GIONG (doi cach doc)
+   [vui] [happy]              [hao hung] [excited]        [buon] [sad]
+   [nghiem tuc] [serious]     [ke chuyen] [storytelling]  [thi tham] [whisper]
+   [diu dang] [gentle]        [gian du] [angry]           [so hai] [scared]
+   [ngac nhien] [surprised]   [nung niu] [tender]         [met moi] [tired]
+   [bi an] [mysterious]       [gap gap] [urgent]          [lanh lung] [cold]
+   [tu hao] [proud]           [cham biem] [sarcastic]
+   --- MOI ---
+   [binh tinh] [calm]         [tu tin] [confident]        [lo lang] [nervous]
+   [ngai ngung] [shy]         [that vong] [disappointed]  [lang man] [romantic]
+   [kich tinh] [dramatic]     (cham, nghi dai hon)        [hoi hop] [suspense]
+   [het] [shout]              [nghen ngao] [tearful]
+   [buon ngu] [sleepy]        [quang cao] [announcer]     [nhe nhom] [relieved]
+   [kho chiu] [annoyed]       [tram ngam] [thoughtful]    [phan dien] [villain] (tram han)
+   [tre con] [child] (cao)    [gia] [old] (tram, cham)     [nghi ngo] [suspicious]
+   [tinh nghich] [playful]
+
+2) AM THANH - CHI TAO KHOANG NGHI NGAN, KHONG DOC THANH CHU
+   (F5 doc "Wow/Huh/Haha" chen vao nghe nhu doc sai kich ban. Muon co tieng
+   do thi GO THANG vao cau, vd: Wow, that's huge!)
+   [cuoi] [laugh]  [cuoi nhe] [chuckle]  [tho dai] [sigh]  [khoc] [cry]  [wow]
+   [um] [umm]  [a] [uh]  [hang giong] [ahem]  [suyt] [shh]
+   --- MOI ---
+   [ha hoc] [gasp]  [het len] [scream]  [ngap] [yawn]  [hum] [hmm]  [o] [oh]
+   [oi] [ouch]  [yeah] [yay]  [ha] [huh]  [phu] [phew]  [hu] [ugh]  [ui] [oops]
+   [oi chao] [aww]  [u hu] [mm-hmm]
+
+3) HIEU UNG AM THANH (MOI - giu toi [khong hieu ung] / [no effect])
+   [dien thoai] [phone]    [radio]            [vang] [echo]
+   [hoi truong] [hall]     [hang dong] [cave] [robot]
+   [loa] [megaphone]       [noi tam] [thought]  (giong suy nghi trong dau)
+   [xa] [distant]          [khong hieu ung] [no effect]
+
+4) TOC DO / AM LUONG (MOI - cong don, het khi gap [binh thuong])
+   [cham] [slow]   [rat cham] [very slow]   [nhanh] [fast]   [rat nhanh] [very fast]
+   [to] [loud]     [nho] [quiet]
+
+5) KHAC
+   *tu can nhan*            -> ca cau doc cham hon chut + to hon chut (giu nguyen giong)
+   [nghi ngan] [short pause]  [nghi] [pause]  [nghi dai] [long pause]   ...  -> khoang lang
+
+VI DU (tieng Anh):
+[storytelling] It was a cold night. [villain] So, you came back. [pause]
+[phone] Hello? Who is this? [no effect] [child] [fast] I want ice cream!
+[normal] [dramatic] And then... [whisper] [echo] the light was gone.

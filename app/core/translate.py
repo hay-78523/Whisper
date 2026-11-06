@@ -93,21 +93,104 @@ def rotate_groq_key():
 _ollama_cache = [0.0, None]      # (luc kiem tra, ten model) — cache 60s
 
 
+_ollama_state = {"online": False, "models": [], "skip": set()}   # skip: model vua thieu RAM
+
+
 def _ollama_model():
-    """Model Ollama dang chay local (None neu Ollama tat/chua cai)."""
+    """Model Ollama dang chay local (None neu Ollama tat/chua cai).
+    Co model -> cache 60s; KHONG co -> chi cache 5s de nguoi dung bat lai Ollama
+    la dung duoc ngay, khong phai doi."""
     now = time.time()
-    if now - _ollama_cache[0] < 60:
+    ttl = 60 if _ollama_cache[1] else 5
+    if now - _ollama_cache[0] < ttl:
         return _ollama_cache[1]
     model = None
     try:
         import requests
         r = requests.get(config.OLLAMA_URL + "/api/tags", timeout=1.5)
         tags = [m["name"] for m in r.json().get("models", [])]
-        model = getattr(config, "OLLAMA_MODEL", "") or (tags[0] if tags else None)
+        _ollama_state.update(online=True, models=tags)
+        usable = [t for t in tags if t not in _ollama_state["skip"]] or tags
+        want = getattr(config, "OLLAMA_MODEL", "") or ""
+        model = (want if want in usable else None) or \
+            next((t for t in usable if t.startswith("qwen2.5")), None) or (usable[0] if usable else None)
     except Exception:
+        _ollama_state.update(online=False, models=[])
         model = None
     _ollama_cache[:] = [now, model]
     return model
+
+
+def ollama_info():
+    """Trang thai AI local cho /admin va bao loi."""
+    model = _ollama_model()
+    return {"online": _ollama_state["online"], "model": model,
+            "installed": list(_ollama_state["models"]),
+            "skipped": sorted(_ollama_state["skip"])}
+
+
+def _model_size_b(name):
+    m = re.search(r":(\d+(?:\.\d+)?)b", name or "")
+    return float(m.group(1)) if m else 99.0
+
+
+def ollama_fallback_model(failed):
+    """Model vua THIEU RAM -> danh dau bo qua, chon model NHO HON da cai (None neu het)."""
+    _ollama_state["skip"].add(failed)
+    smaller = sorted((t for t in _ollama_state["models"]
+                      if t not in _ollama_state["skip"]
+                      and _model_size_b(t) < _model_size_b(failed)),
+                     key=_model_size_b, reverse=True)
+    _ollama_cache[:] = [0.0, None]           # buoc chon lai model o lan goi sau
+    return smaller[0] if smaller else None
+
+
+class AIError(RuntimeError):
+    """Loi AI local da phan loai: kind = down | no_model | memory | timeout | other."""
+
+    def __init__(self, kind, msg, model=None):
+        RuntimeError.__init__(self, msg)
+        self.kind = kind
+        self.model = model
+
+
+def ollama_call(prompt, temperature=0.3, timeout=180):
+    """Goi Ollama 1 lan, loi thi nem AIError DA PHAN LOAI (de bien kich biet cach xu ly)."""
+    import requests
+    model = _ollama_model()
+    if not model:
+        if _ollama_state["online"]:
+            raise AIError("no_model", "Ollama đang chạy nhưng chưa có model AI")
+        raise AIError("down", "Ollama không chạy")
+    try:
+        r = requests.post(
+            config.OLLAMA_URL + "/api/chat",
+            json={"model": model, "stream": False,
+                  "messages": [{"role": "user", "content": prompt}],
+                  "options": {"temperature": temperature,
+                              "num_ctx": 8192, "num_predict": 1600}},
+            timeout=timeout)
+    except requests.exceptions.Timeout:
+        raise AIError("timeout", "AI trả lời quá %ds" % timeout, model)
+    except requests.exceptions.ConnectionError:
+        _ollama_cache[:] = [0.0, None]
+        raise AIError("down", "mất kết nối tới Ollama", model)
+    if r.status_code >= 400:
+        try:
+            err = r.json().get("error") or r.text
+        except Exception:
+            err = r.text
+        low = (err or "").lower()
+        if "memory" in low or "out of memory" in low or "cuda" in low:
+            raise AIError("memory", "thiếu RAM/VRAM cho %s" % model, model)
+        if "not found" in low:
+            _ollama_cache[:] = [0.0, None]
+            raise AIError("no_model", "không thấy model %s" % model, model)
+        raise AIError("other", "Ollama lỗi %d: %s" % (r.status_code, (err or "")[:120]), model)
+    try:
+        return _strip_fences(r.json()["message"]["content"])
+    except Exception:
+        raise AIError("other", "Ollama trả dữ liệu hỏng", model)
 
 
 def has_gemini():
@@ -116,7 +199,7 @@ def has_gemini():
 
 
 def has_llm():
-    return bool(_gemini_key() or _groq_key() or _ollama_model())
+    return bool(_ollama_model())
 
 
 def _strip_fences(s):
@@ -224,9 +307,8 @@ def _llm_call(prompt, temperature=0.2):
     global LLM_PROVIDER
     errors = []
     tried = set()
-    chain = [("Gemini", _gemini_key, _gemini_llm),
-             ("Groq", _groq_key, _groq_llm),
-             ("Ollama", _ollama_model, _ollama_llm)]
+    # BAN KHACH: chi dung AI LOCAL (Ollama) — khong goi API online
+    chain = [("Ollama", _ollama_model, _ollama_llm)]
     for skip_cooldown in (False, True):   # vong 2: chi vot lai nguon da bi bo qua vi dang nghi
         for name, avail, call in chain:
             if name in tried or not avail():
@@ -240,7 +322,8 @@ def _llm_call(prompt, temperature=0.2):
                 _llm_cooldown.pop(name, None)
                 return out
             except Exception as e:
-                _llm_cooldown[name] = time.time() + 300
+                if name != "Ollama":      # Ollama chay tren may: khong khoa 5 phut
+                    _llm_cooldown[name] = time.time() + 300
                 errors.append("%s: %s" % (name, str(e)[:80]))
     raise RuntimeError("; ".join(errors)
                        or "Chua cau hinh AI (key Gemini/Groq hoac Ollama)")

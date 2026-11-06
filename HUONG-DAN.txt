@@ -1,0 +1,67 @@
+WHISPER STT - BAN V4 (CHAY NGAY, KHONG CAN CAI DAT)
+=====================================================
+
+1. Giai nen TOAN BO file zip bang WinRAR hoac 7-Zip ra mot thu muc NGAN,
+   vi du:  D:\WhisperSTT   hoac   C:\W
+   - Dung chay truc tiep trong file zip.
+   - May quan net co "dong bang o C" (khoi dong lai la mat): nen giai nen ra
+     o D: / USB de giong nhan ban + ket qua khong bi xoa.
+
+2. Nhay dup  Start-Windows.bat
+   - Lan dau mat khoang 30-60 giay de nap engine. Trinh duyet tu mo.
+   - May co card NVIDIA: LAN DAU tool tu tai ban GPU cua PyTorch (~3GB, can
+     mang, 5-15 phut). Xong 1 lan la dung GPU mai (nhanh hon CPU rat nhieu).
+     Tai loi / khong co mang thi tool van chay bang CPU.
+   - Dong cua so den = tat ung dung.
+
+3. Da kem san trong goi (KHONG can mang, KHONG can quyen Admin):
+   - Python + PyTorch + engine Voice Clone (F5-TTS) trong thu muc python\
+   - Model giong (Anh + Viet), vocoder, Whisper small (tu nghe script khi them giong)
+   - ffmpeg
+   Ban nay CHI con Soan thao kich ban + giong clone (khong goi API online nao).
+
+3b. AI BIEN KICH (tu gan the bieu cam) chay bang AI LOCAL (Ollama):
+   - Lan dau mo tool se hien them cua so "AI local" tu tai Ollama (~1.5GB) va
+     model qwen2.5:3b (~1.9GB) - CAN MANG, chi 1 lan. Tai xong cua so tu dong.
+   - Trong luc chua tai xong, nut AI bien kich van chay ban gan the nhanh.
+
+3c. ENGINE GIONG ANH: CHATTERBOX (moi) - doc tu nhien, co cam xuc that
+   - May co GPU NVIDIA: giong clone tieng Anh tu dung Chatterbox (da kem san
+     model trong thu muc models_chatterbox). The cam xuc [vui] [hao hung] [buon]...
+     dieu khien thang "muc cam xuc" cua Chatterbox.
+   - May chi co CPU: tu dung F5 (Chatterbox tren CPU qua cham).
+   - Doi engine: /admin -> Voice Clone -> "Engine giong Anh" (tu dong / Chatterbox / F5).
+   - Kich ban tieng Viet van dung F5.
+
+4. THEM GIONG CLONE MOI: vao trang /admin -> muc Voice Clone -> chon file giong
+   -> dat ten -> Them (de TRONG o script, tool tu nghe).
+   * NEN dung file DAI 1-3 phut: 1 nguoi noi, ro, KHONG nhac nen / tieng on,
+     noi tu nhien co doan soi noi co doan tram (vd tai tu ElevenLabs 1-3 phut).
+     Tool tu chon doan 6-11 giay hay nhat (cat dung het cau) lam mau chinh, them
+     mau "hao hung" + mau "tram" de the cam xuc doc bang chinh chat giong do.
+   * File ngan 6-11 giay van dung duoc, nhung the cam xuc chi doi nhe.
+   * Tool tu tao file nghe thu, tu chinh toc do; /admin bao "doc thu chi dung X%"
+     neu mau kem -> nen thay file khac.
+
+5. TEST NHANH TAT CA GIONG: nhay dup Test-Voices.bat (GPU ~5-15 giay/giong).
+   Ket qua trong thu muc test_voices\ (file wav tung giong + BAO_CAO.csv).
+
+5b. MAU CAM XUC CHO GIONG ANH (can GPU NVIDIA): nhay dup Tao-Mau-Cam-Xuc.bat.
+   Giong Anh chua co mau "hao hung"/"tram" se duoc Chatterbox doc 1 doan hao hung +
+   1 doan tram bang CHINH giong do (moi mau 3 lan, chi giu ban giong giong goc >= 85%).
+   Sau do the [vui] [hao hung]... doc bang mau hao hung, [buon] [diu dang]... bang mau
+   tram — ca may CPU cung dung duoc. Ket qua + file nghe thu: thu muc mau_cam_xuc\
+   (BAO_CAO.csv ghi % giong giong goc tung giong, muc tieu >= 80%).
+   Hoac: /admin -> Voice Clone -> "Tao mau cam xuc cho giong Anh con thieu".
+   Giong Viet: Chatterbox khong doc tieng Viet -> them giong tu file DAI 1-3 phut co
+   doan soi noi + doan tram, tool tu cat mau cam xuc.
+
+5c. THE LOAI VIDEO: o "The loai" canh "Toc do" (Quang cao / Ke chuyen / Tin tuc /
+   Tam su / Review / Kinh di). Moi the loai co tong nen, toc do, ngat nghi rieng; cau
+   khong gan the doc theo tong cua the loai. De "Tu dong": AI bien kich tu doan the loai.
+
+6. Neu bao loi Voice Clone: chup man hinh cua so den + file
+   data\logs\clone_worker.log gui ky thuat.
+   Neu AI bien kich bao loi: trang /admin (muc Trang thai he thong) ghi ro loi
+   + cach khac phuc; gui them file data\logs\ai_bien_kich.log cho ky thuat.
+   AI loi thi kich ban VAN duoc gan the co ban, khong mat chu nao.

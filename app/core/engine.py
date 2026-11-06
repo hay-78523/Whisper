@@ -28,8 +28,13 @@ def get_model(name):
         if name not in _models:
             from faster_whisper import WhisperModel
             threads = max(4, os.cpu_count() or 4)
-            _models[name] = WhisperModel(name, device="cpu",
-                                         compute_type="int8", cpu_threads=threads)
+            kw = dict(device="cpu", compute_type="int8", cpu_threads=threads)
+            try:
+                # uu tien model co san trong may (ban giao kem san trong data/hf_cache)
+                # -> khong goi mang; mang chan HuggingFace cung van chay
+                _models[name] = WhisperModel(name, local_files_only=True, **kw)
+            except Exception:
+                _models[name] = WhisperModel(name, **kw)   # chua co -> tai ve
         return _models[name]
 
 
@@ -72,7 +77,8 @@ def transcribe(model, path, language=None, progress=None):
         texts.append(seg.text)
         for w in (seg.words or []):
             words.append({"text": w.word, "start": round(w.start, 3),
-                          "end": round(w.end, 3), "type": "word"})
+                          "end": round(w.end, 3), "type": "word",
+                          "p": round(float(getattr(w, "probability", 1.0) or 0.0), 3)})
         if progress and info.duration:
             progress(min(seg.end, info.duration), info.duration)
     return {

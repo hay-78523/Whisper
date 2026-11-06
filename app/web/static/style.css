@@ -595,3 +595,158 @@ a.audio { color: var(--accent); text-decoration: none; font-weight: 700; }
 .top-navbar .tabs-porsche {
   margin-bottom: 0;
 }
+
+/* ---------- Hộp thoại tạo hồ sơ giọng (Studio Modal) ---------- */
+.vclone-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(12, 15, 22, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  overflow-y: auto;
+  padding: 40px 16px;
+}
+.vclone-dialog {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--card);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 28px 30px;
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.vclone-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+}
+.vclone-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.vclone-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.vclone-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+@media (max-width: 560px) {
+  .vclone-grid { grid-template-columns: 1fr; }
+}
+.vclone-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.vclone-field input,
+.vclone-field select {
+  width: 100%;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+.vclone-drop {
+  background: var(--bg);
+  box-shadow: var(--shadow-in);
+  border-radius: 16px;
+  padding: 26px 18px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 16px;
+  border: 1px solid rgba(128, 128, 128, 0.1);
+  transition: all 0.2s ease;
+}
+.vclone-drop:hover,
+.vclone-drop.over {
+  border-color: var(--accent);
+}
+.vclone-drop-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--text);
+}
+.vclone-drop-hint {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.vclone-filebadge {
+  display: none;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow-out-sm);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.vclone-preview {
+  display: none;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: var(--shadow-in);
+}
+.vclone-status {
+  display: none;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow-in);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.btn-studio-add {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: var(--shadow-out-sm);
+  border: 1px solid rgba(128, 128, 128, 0.16);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-studio-add:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-out-hover);
+}
+.btn-studio-primary {
+  padding: 11px 22px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--accent);
+  border-radius: 11px;
+}
+

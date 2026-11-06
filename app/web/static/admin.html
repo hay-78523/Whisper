@@ -12,22 +12,109 @@
 <div class="wrap">
   <div class="admin-header">
     <div class="admin-title">
-      <h1>Dashboard Quản trị</h1>
-      <div class="sub">Quản lý hệ thống Whisper STT, models & jobs</div>
+      <h1>Dashboard Quản Trị Doanh Nghiệp</h1>
+      <div class="sub">Giám sát nhân viên đã Gen kịch bản gì · Quản lý phiên làm việc (Quota 3 máy) · Kho giọng Clone Tiếng Việt</div>
     </div>
     <div class="admin-actions">
-      <a href="/" class="btn-nav">← Về trang chính</a>
+      <a href="/" class="btn-nav">← Về bàn làm việc chính</a>
       <a href="#" id="logout" class="btn-nav">Đăng xuất</a>
     </div>
   </div>
 
   <div class="card">
-    <h2>Trạng thái server</h2>
+    <h2>Trạng thái hệ thống &amp; GPU</h2>
     <div class="chips" id="statuschips">Đang tải…</div>
+    <div id="ai_status" class="muted" style="font-size:12px; margin-top:8px"></div>
+  </div>
+
+  <!-- BANG GIAM SAT NHAN VIEN DA GEN CAI GI -->
+  <div class="card" id="auditcard">
+    <h2>Nhật ký tạo giọng &amp; Kịch bản nhân viên</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:-4px">
+      <div class="muted" style="font-size:12px">Lưu tự động toàn bộ kịch bản và file âm thanh nhân viên đã tạo trên các phiên làm việc</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <span id="gen_stats" class="chip">0 bản thu</span>
+        <select id="gen_filter_user" class="inp" style="min-width:150px">
+          <option value="">Tất cả nhân viên</option>
+        </select>
+        <button class="btn" id="gen_refresh">Làm mới</button>
+      </div>
+    </div>
+    <table style="margin-top:12px">
+      <thead>
+        <tr>
+          <th>Nhân viên</th>
+          <th>Giọng sử dụng</th>
+          <th>Ký tự</th>
+          <th>Nội dung kịch bản đã Gen</th>
+          <th>Thời điểm</th>
+          <th>Nghe / Tải Audio</th>
+        </tr>
+      </thead>
+      <tbody id="gen_history">
+        <tr><td colspan="6" class="muted">Chưa có lịch sử lồng tiếng nào.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- MODAL XEM TOAN BO KICH BAN DA GEN -->
+  <div id="script_modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,12,18,0.75); backdrop-filter:blur(5px); padding:32px 14px; overflow-y:auto">
+    <div style="max-width:680px; margin:0 auto; background:var(--card, #fff); color:var(--text, #111); border:1px solid var(--border, #e5e7eb); border-radius:16px; padding:22px; box-shadow:0 24px 60px rgba(0,0,0,0.35)">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+        <div id="sm_title" style="font-weight:800; font-size:16px">Chi tiết kịch bản đã Gen</div>
+        <div style="display:flex; gap:8px">
+          <button class="btn" id="sm_copy">Copy kịch bản</button>
+          <button class="btn" id="sm_close">Đóng</button>
+        </div>
+      </div>
+      <div id="sm_meta" class="muted" style="font-size:12px; margin-bottom:10px"></div>
+      <pre id="sm_body" style="white-space:pre-wrap; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:13.5px; line-height:1.7; max-height:420px; overflow-y:auto; font-family:var(--font)"></pre>
+    </div>
+  </div>
+
+  <!-- QUAN LY TAI KHOAN & PHIEN LAM VIEC -->
+  <div class="card" id="userscard">
+    <h2>Quản lý tài khoản &amp; Phiên làm việc</h2>
+    <div class="chips" id="quota_chips" style="margin-bottom:10px"></div>
+
+    <div style="margin-top:12px; font-size:13px; font-weight:700">Phiên làm việc đang hoạt động:</div>
+    <table style="margin-top:6px">
+      <thead><tr><th>Tài khoản</th><th>Vai trò</th><th>IP Máy trạm</th><th>Hoạt động</th><th></th></tr></thead>
+      <tbody id="sessions_tb"><tr><td colspan="5" class="muted">Đang tải…</td></tr></tbody>
+    </table>
+
+    <div style="margin-top:16px; font-size:13px; font-weight:700">Danh sách Tài khoản được cấp phép (Tối đa 3 tài khoản Nhân viên):</div>
+    <table style="margin-top:6px">
+      <thead><tr><th>Tên đăng nhập</th><th>Vai trò</th><th></th></tr></thead>
+      <tbody id="users"></tbody>
+    </table>
+    <div class="formrow">
+      <input id="nu_name" class="inp" placeholder="tên đăng nhập (vd: nhanvien2)" style="width:170px">
+      <input id="nu_pass" class="inp" type="password" placeholder="mật khẩu" style="width:130px">
+      <select id="nu_role" class="inp">
+        <option value="user">user (Nhân viên — tối đa 3)</option>
+        <option value="admin">admin (Trưởng phòng)</option>
+      </select>
+      <button class="btn" id="nu_add">Tạo tài khoản</button>
+      <span id="nu_msg" class="muted" style="font-size:12px"></span>
+    </div>
+  </div>
+
+  <!-- GIONG NHAN VIEN GUI LEN - CHO DUYET -->
+  <div class="card" id="pendingcard">
+    <h2>Giọng nhân viên gửi — Chờ duyệt <span id="pending_count" class="chip" style="font-size:11px">0</span></h2>
+    <div class="muted" style="font-size:12px; margin-top:-4px">
+      Giọng gửi từ máy trạm chưa hiện trong danh sách chọn giọng của ai. Nghe thử rồi bấm <b>Phê duyệt</b> (chỉ làm được trên máy chủ).
+    </div>
+    <table style="margin-top:10px">
+      <thead><tr><th>Hồ sơ giọng</th><th>Người gửi</th><th>Mẫu &amp; Chất lượng</th><th>Nghe thử</th><th></th></tr></thead>
+      <tbody id="pending_voices"><tr><td colspan="5" class="muted">Không có giọng nào chờ duyệt.</td></tr></tbody>
+    </table>
+    <span id="pending_msg" class="muted" style="font-size:12px"></span>
   </div>
 
   <div class="card" id="clonecard">
-    <h2>🎤 Giọng nhân bản (Voice Clone)</h2>
+    <h2>Kho giọng nhân bản dùng chung (Chỉ thêm/xóa trên máy chủ)</h2>
 
     <div class="chips" id="cl_chips">Đang kiểm tra…</div>
 
@@ -40,12 +127,19 @@
       <button class="btn" id="cl_warm">Nạp sẵn engine</button>
       <button class="btn" id="cl_stopengine">Tắt engine</button>
       <button class="btn" id="cl_recheck">Kiểm tra lại</button>
+      <button class="btn" id="cl_styles_all" title="Chatterbox (GPU) đọc 1 đoạn hào hứng + 1 đoạn trầm bằng chính giọng đó; chỉ giữ mẫu giống giọng gốc từ 85%">Tạo mẫu cảm xúc cho giọng Anh còn thiếu</button>
       <span id="cl_setupmsg" class="muted" style="font-size:12px"></span>
     </div>
     <pre id="cl_log" class="muted"
          style="display:none;font-size:11px;white-space:pre-wrap;margin:6px 0 0"></pre>
 
     <div class="formrow" style="margin-top:12px">
+      <span class="muted" style="font-size:12px">Engine giọng Anh</span>
+      <select id="cl_engine" class="inp">
+        <option value="">tự động (Chatterbox khi có GPU)</option>
+        <option value="chatterbox">Chatterbox — tự nhiên, có cảm xúc</option>
+        <option value="f5">F5 — nhanh, giống âm sắc</option>
+      </select>
       <span class="muted" style="font-size:12px">Chất lượng</span>
       <select id="cl_quality" class="inp">
         <option value="">theo mặc định</option>
@@ -68,20 +162,25 @@
     </div>
 
     <table style="margin-top:14px">
-      <thead><tr><th>Giọng</th><th>Mẫu</th><th>Script mẫu</th><th></th></tr></thead>
+      <thead><tr><th>Hồ sơ giọng</th><th>Thời lượng &amp; Sắc thái</th><th>Lời thoại mẫu</th><th></th></tr></thead>
       <tbody id="clones"><tr><td colspan="4" class="muted">Chưa có giọng nào.</td></tr></tbody>
     </table>
-    <div class="formrow">
-      <input id="cl_name" class="inp" placeholder="tên (bỏ trống tự lấy tên file)" style="width:200px">
-      <input id="cl_file" class="inp" type="file" accept="audio/*,video/*" multiple style="width:200px">
-      <button class="btn" id="cl_add">Tạo giọng</button>
+    <div class="formrow" id="cl_host_form" style="margin-top:12px">
+      <input id="cl_name" class="inp" placeholder="Tên hồ sơ giọng" style="width:190px">
+      <select id="cl_lang" class="inp">
+        <option value="vi" selected>Tiếng Việt</option>
+        <option value="en">Tiếng Anh</option>
+      </select>
+      <input id="cl_file" class="inp" type="file" accept="audio/*,video/*,.mp4,.mov,.mkv,.webm" multiple style="width:210px">
+      <input id="cl_trim_start" class="inp" type="number" step="0.5" min="0" placeholder="Từ giây" style="width:85px" title="Điểm bắt đầu trích xuất (bỏ trống = từ đầu)">
+      <input id="cl_trim_end" class="inp" type="number" step="0.5" min="0" placeholder="Đến giây" style="width:85px" title="Điểm kết thúc trích xuất (bỏ trống = hết file)">
+      <label class="muted" style="font-size:12px"><input type="checkbox" id="cl_denoise" checked> Khử nhạc nền</label>
+      <button class="btn" id="cl_add">Tạo hồ sơ giọng</button>
       <span id="cl_msg" class="muted" style="font-size:12px"></span>
     </div>
-    <input id="cl_text" class="inp" placeholder="script của mẫu (bỏ trống = tool tự nghe rồi ghi lại)" style="width:100%;margin-top:8px">
+    <input id="cl_text" class="inp" placeholder="Lời thoại mẫu thủ công — bỏ trống để hệ thống tự nhận diện" style="width:100%;margin-top:8px">
     <div class="muted" style="font-size:12px;margin-top:8px">
-      Mẫu tốt nhất: <b>6–12 giây</b>, một người nói, nghe rõ, không nhạc nền — mẫu dài hơn
-      tool tự cắt và tự nghe lại script cho khớp. Chỉ clone giọng CỦA BẠN hoặc người đã đồng ý;
-      model phi thương mại (CC-BY-NC-SA); nên ghi rõ audio do AI tạo khi đăng công khai.
+      Hỗ trợ file video (.mp4, .mov, .mkv) và âm thanh (.wav, .mp3, .m4a) độ dài 15 giây – 3 phút. Chỉ máy chủ (Host) mới được phép thêm hoặc xóa mẫu giọng.
     </div>
   </div>
 
@@ -94,35 +193,27 @@
   </div>
 
   <div class="card">
-    <h2>Tài khoản</h2>
+    <h2>Tiến trình hệ thống đang chạy (Real-time Jobs)</h2>
     <table>
-      <thead><tr><th>Tên đăng nhập</th><th>Vai trò</th><th></th></tr></thead>
-      <tbody id="users"></tbody>
-    </table>
-    <div class="formrow">
-      <input id="nu_name" class="inp" placeholder="tên đăng nhập" style="width:150px">
-      <input id="nu_pass" class="inp" type="password" placeholder="mật khẩu" style="width:130px">
-      <select id="nu_role" class="inp">
-        <option value="user">user</option>
-        <option value="admin">admin</option>
-      </select>
-      <button class="btn" id="nu_add">Tạo tài khoản</button>
-      <span id="nu_msg" class="muted" style="font-size:12px"></span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Job gần đây</h2>
-    <table>
-      <thead><tr><th>#</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th><th>Tiến độ</th><th>Thời gian</th><th></th></tr></thead>
-      <tbody id="jobs"><tr><td colspan="7" class="muted">Chưa có job nào.</td></tr></tbody>
+      <thead><tr><th>#</th><th>Người chạy</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th><th>Tiến độ</th><th>Thời gian</th><th></th></tr></thead>
+      <tbody id="jobs"><tr><td colspan="8" class="muted">Chưa có job nào.</td></tr></tbody>
     </table>
   </div>
 </div>
 
 <script>
 (function () {
-  var KIND = { prepare: 'Phiên âm + dịch', render: 'Tạo giọng + ghép', preload: 'Nạp model' };
+  var KIND = {
+    prepare: 'Phiên âm + dịch',
+    render: 'Tạo giọng + ghép',
+    text_dub: 'Đọc kịch bản',
+    annotate: 'AI biên kịch',
+    preload: 'Nạp model',
+    clone_setup: 'Tải model clone',
+    clone_warm: 'Nạp engine clone',
+    clone_sample: 'Đọc thử mẫu',
+    clone_styles: 'Tạo mẫu cảm xúc'
+  };
 
   function guard(r) {
     if (r.status === 401 || r.status === 403) { location.href = '/login'; throw new Error('auth'); }
@@ -137,16 +228,181 @@
   });
 
   var myName = '';
+  var _genItems = [];
+
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts * 1000);
+    function p(n) { return ('0' + n).slice(-2); }
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) +
+      ' ' + p(d.getDate()) + '/' + p(d.getMonth() + 1);
+  }
+
+  // ---------- MODAL XEM DAY DU KICH BAN ----------
+  var smModal = document.getElementById('script_modal');
+  var smBody = document.getElementById('sm_body');
+  document.getElementById('sm_close').addEventListener('click', function () { smModal.style.display = 'none'; });
+  smModal.addEventListener('click', function (e) { if (e.target === smModal) smModal.style.display = 'none'; });
+  document.getElementById('sm_copy').addEventListener('click', function () {
+    navigator.clipboard.writeText(smBody.textContent || '');
+    var b = this; b.textContent = 'Đã copy!';
+    setTimeout(function () { b.textContent = 'Copy kịch bản'; }, 1500);
+  });
+
+  function openScriptModal(item) {
+    document.getElementById('sm_title').textContent = 'Kịch bản của @' + (item.owner || 'admin') + ' (' + (item.char_count || 0) + ' ký tự)';
+    document.getElementById('sm_meta').textContent = 'Giọng đọc: ' + (item.voice || '—') + ' · Tốc độ: ' + (item.rate || '+0%') + ' · Thời gian: ' + fmtTime(item.created);
+    smBody.textContent = item.full_script || item.script_preview || '';
+    smModal.style.display = 'block';
+  }
+
+  // ---------- LICH SU NHAN VIEN DA GEN CAI GI ----------
+  var filterUserSel = document.getElementById('gen_filter_user');
+  filterUserSel.addEventListener('change', loadGenHistory);
+  document.getElementById('gen_refresh').addEventListener('click', loadGenHistory);
+
+  var _genSig = null;
+  function loadGenHistory() {
+    var owner = filterUserSel.value || '';
+    fetch('/api/admin/gen_history' + (owner ? '?owner=' + encodeURIComponent(owner) : ''))
+      .then(guard).then(function (r) { return r.json(); }).then(function (d) {
+        var list = d.history || [];
+        _genItems = list;
+        var totalChars = list.reduce(function (s, x) { return s + (x.char_count || 0); }, 0);
+        document.getElementById('gen_stats').textContent = list.length + ' bản thu · ' + totalChars.toLocaleString('vi-VN') + ' ký tự';
+        var tb = document.getElementById('gen_history');
+        // lam moi moi 3.5s: chi ve lai khi co thay doi va khong ai dang nghe
+        var sig = owner + '|' + JSON.stringify(list.map(function (x) { return [x.id, x.state, x.done]; }));
+        if (sig === _genSig || anyPlaying(tb)) return;
+        _genSig = sig;
+        if (!list.length) {
+          tb.innerHTML = '<tr><td colspan="6" class="muted">Chưa có kịch bản nào được Gen. Khi nhân viên bấm "Tạo giọng đọc", kịch bản và file audio sẽ hiện ngay tại đây.</td></tr>';
+          return;
+        }
+        tb.innerHTML = '';
+        list.forEach(function (item) {
+          var tr = document.createElement('tr');
+          var vClean = (item.voice || '').replace(/^c:/, '');
+          var isLive = item.state === 'running';
+          var stBadge = isLive
+            ? '<span class="chip" style="background:rgba(245,158,11,0.15);color:#d97706">Đang Gen (' + item.done + '/' + (item.total || '…') + ')</span>'
+            : '';
+          tr.innerHTML =
+            '<td><b>@' + esc(item.owner || 'admin') + '</b></td>' +
+            '<td><code>' + esc(vClean || '—') + '</code></td>' +
+            '<td><b>' + (item.char_count || 0).toLocaleString('vi-VN') + '</b></td>' +
+            '<td style="max-width:340px">' +
+              stBadge +
+              '<div style="font-size:12.5px; color:var(--text); line-height:1.45">' + esc(item.script_preview || '—') + '</div>' +
+            '</td>' +
+            '<td style="font-size:12px; white-space:nowrap">' + fmtTime(item.created) +
+              '<br><span class="muted">' + fmtDur(item.elapsed || 0) + (item.audio_kb ? ' · ' + item.audio_kb + 'KB' : '') + '</span></td>' +
+            '<td style="white-space:nowrap"></td>';
+
+          var scriptCell = tr.children[3];
+          if (item.full_script && item.full_script.length > 0) {
+            var viewBtn = document.createElement('button');
+            viewBtn.className = 'btn';
+            viewBtn.style.cssText = 'font-size:11px; padding:2px 8px; margin-top:4px';
+            viewBtn.textContent = 'Xem toàn bộ kịch bản';
+            viewBtn.addEventListener('click', function () { openScriptModal(item); });
+            scriptCell.appendChild(viewBtn);
+          }
+
+          var actCell = tr.lastChild;
+          if (!isLive && (item.audio_file || item.audio_kb > 0)) {
+            var audioUrl = '/api/admin/gen_audio?id=' + encodeURIComponent(item.id);
+            var player = document.createElement('audio');
+            player.controls = true; player.preload = 'none';
+            player.src = audioUrl;
+            player.style.cssText = 'width:220px; height:32px; display:block; margin-bottom:6px';
+            actCell.appendChild(player);
+
+            var dlLink = document.createElement('a');
+            dlLink.className = 'btn';
+            dlLink.style.cssText = 'margin-right:6px; text-decoration:none; display:inline-block';
+            dlLink.href = audioUrl + '&download=1';
+            dlLink.textContent = 'Tải về';
+            actCell.appendChild(dlLink);
+          }
+          if (!isLive && item.id && item.id.indexOf('live_') !== 0) {
+            var delBtn = document.createElement('button');
+            delBtn.className = 'btn';
+            delBtn.textContent = 'Xóa';
+            delBtn.addEventListener('click', function () {
+              fetch('/api/admin/gen_delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: item.id })
+              }).then(function () { _genSig = null; loadGenHistory(); });
+            });
+            actCell.appendChild(delBtn);
+          }
+          tb.appendChild(tr);
+        });
+      }).catch(function () {});
+  }
 
   function loadUsers() {
     fetch('/api/admin/users').then(guard).then(function (r) { return r.json(); }).then(function (d) {
+      // Quota chips
+      var q = d.quota || { staff_count: 0, max_staff: 3, admin_count: 1 };
+      var sess = d.sessions || [];
+      document.getElementById('quota_chips').innerHTML = [
+        'Tài khoản Nhân viên: ' + q.staff_count + ' / ' + q.max_staff + ' (Gói Doanh Nghiệp)',
+        'Trưởng phòng (Admin): ' + q.admin_count,
+        'Phiên đang hoạt động: ' + sess.length
+      ].map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('');
+
+      // Update filter dropdown in audit log
+      var curFilter = filterUserSel.value;
+      filterUserSel.innerHTML = '<option value="">Tất cả nhân viên</option>';
+      d.users.forEach(function (u) {
+        var o = document.createElement('option');
+        o.value = u.username;
+        o.textContent = '@' + u.username + ' (' + u.role + ')';
+        filterUserSel.appendChild(o);
+      });
+      filterUserSel.value = curFilter;
+
+      // Active sessions table
+      var stb = document.getElementById('sessions_tb');
+      if (!sess.length) {
+        stb.innerHTML = '<tr><td colspan="5" class="muted">Không có phiên nào đang mở.</td></tr>';
+      } else {
+        stb.innerHTML = '';
+        sess.forEach(function (s) {
+          var tr = document.createElement('tr');
+          var ago = Math.max(0, Math.round(Date.now() / 1000 - (s.last_seen || 0)));
+          tr.innerHTML =
+            '<td><b>@' + esc(s.user) + '</b></td>' +
+            '<td>' + (s.role === 'admin' ? 'Trưởng phòng (admin)' : 'Nhân viên (user)') + '</td>' +
+            '<td><code>' + esc(s.ip || '127.0.0.1') + '</code></td>' +
+            '<td class="muted" style="font-size:12px">' + (ago < 10 ? 'vừa xong' : ago + 's trước') + '</td>' +
+            '<td></td>';
+          var kick = document.createElement('button');
+          kick.className = 'btn';
+          kick.textContent = 'Ngắt phiên';
+          if (s.user === myName && sess.length <= 1) {
+            kick.disabled = true;
+          }
+          kick.addEventListener('click', function () {
+            fetch('/api/admin/session_kick', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token_id: s.token_id })
+            }).then(loadUsers);
+          });
+          tr.lastChild.appendChild(kick);
+          stb.appendChild(tr);
+        });
+      }
+
       var tb = document.getElementById('users');
       tb.innerHTML = '';
       d.users.forEach(function (u) {
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td><b>' + esc(u.username) + '</b>' +
+        tr.innerHTML = '<td><b>@' + esc(u.username) + '</b>' +
           (u.username === myName ? ' <span class="muted" style="font-size:11px">(bạn)</span>' : '') +
-          '</td><td>' + (u.role === 'admin' ? 'admin' : 'user') + '</td><td></td>';
+          '</td><td>' + (u.role === 'admin' ? 'Trưởng phòng (admin)' : 'Nhân viên (user)') + '</td><td></td>';
         var del = document.createElement('button');
         del.className = 'btn';
         del.textContent = 'Xóa';
@@ -154,8 +410,6 @@
           del.disabled = true;
           del.title = 'Không thể tự xóa tài khoản đang đăng nhập';
         }
-        // xac nhan 2 lan bam ngay tren nut (khong dung popup confirm — nhieu
-        // trinh duyet/khung nhung chan popup lam nut bam khong co tac dung)
         var timer = null;
         del.addEventListener('click', function () {
           if (del.dataset.arm !== '1') {
@@ -204,7 +458,7 @@
       })
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        msg.textContent = res.ok ? 'Đã tạo.' : (res.j.error || 'Lỗi');
+        msg.textContent = res.ok ? 'Đã tạo tài khoản.' : (res.j.error || 'Lỗi');
         if (res.ok) {
           document.getElementById('nu_name').value = '';
           document.getElementById('nu_pass').value = '';
@@ -225,14 +479,33 @@
     return s < 60 ? s.toFixed(0) + 's' : Math.floor(s / 60) + 'm' + Math.round(s % 60) + 's';
   }
 
+  // ---------- TRANG THAI AI BIEN KICH (Ollama local) ----------
+  function renderAiStatus(ai) {
+    var el = document.getElementById('ai_status');
+    var head = ai.online
+      ? (ai.model ? '<b style="color:var(--ok, #16a34a)">● AI biên kịch: đang chạy</b> · model <code>' + esc(ai.model) + '</code>'
+                  : '<b style="color:#d97706">● AI biên kịch: Ollama chạy nhưng chưa có model</b> — chờ cửa sổ "AI local" tải xong')
+      : '<b style="color:var(--err)">● AI biên kịch: Ollama không chạy</b> — nhân viên đang dùng bản biên kịch nhanh. Mở lại cửa sổ "AI local" hoặc chạy lại Start-Windows.bat';
+    if (ai.skipped && ai.skipped.length) head += ' · bỏ qua (thiếu RAM): ' + esc(ai.skipped.join(', '));
+    var errLine = '';
+    var errNewer = ai.last_error_at && (!ai.last_ok || ai.last_error_at > ai.last_ok);
+    if (ai.last_error && errNewer) {
+      errLine = '<div style="margin-top:4px">Lỗi gần nhất (' + fmtTime(ai.last_error_at) + '): ' + esc(ai.last_error) +
+        (ai.fix ? '<br>Cách khắc phục: ' + esc(ai.fix) : '') +
+        (ai.log_file ? '<br><span style="font-size:11px">Nhật ký chi tiết: <code>' + esc(ai.log_file) + '</code></span>' : '') + '</div>';
+    }
+    el.innerHTML = head + errLine;
+  }
+
   function loadStatus() {
     fetch('/api/admin/status').then(guard).then(function (r) { return r.json(); }).then(function (s) {
       document.getElementById('statuschips').innerHTML = [
-        'Phiên bản ' + s.version,
+        'Phiên bản ' + s.version + (window.PERSONAL ? ' (Bản cá nhân)' : ' (Enterprise Edition)'),
         'Uptime ' + fmtUptime(s.uptime),
         'Model mặc định: ' + s.default_model,
-        'Job: ' + s.jobs.running + ' đang chạy · ' + s.jobs.done + ' xong · ' + s.jobs.error + ' lỗi',
+        'Job: ' + s.jobs.running + ' đang chạy · ' + s.jobs.done + ' xong · ' + (s.jobs.history_total || 0) + ' bản thu đã lưu',
       ].map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('');
+      renderAiStatus(s.ai || {});
 
       var tb = document.getElementById('models');
       tb.innerHTML = '';
@@ -265,7 +538,7 @@
     fetch('/api/admin/jobs').then(guard).then(function (r) { return r.json(); }).then(function (d) {
       var tb = document.getElementById('jobs');
       if (!d.jobs.length) {
-        tb.innerHTML = '<tr><td colspan="7" class="muted">Chưa có job nào.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="8" class="muted">Chưa có job nào.</td></tr>';
         return;
       }
       tb.innerHTML = '';
@@ -279,8 +552,9 @@
         var tr = document.createElement('tr');
         tr.innerHTML =
           '<td>' + j.id + '</td>' +
+          '<td><b>@' + esc(j.owner || 'admin') + '</b></td>' +
           '<td>' + (KIND[j.kind] || esc(j.kind)) + '</td>' +
-          '<td title="' + esc(j.label) + '">' + esc((j.label || '').slice(0, 40)) + '</td>' +
+          '<td title="' + esc(j.script_preview || j.label) + '">' + esc((j.script_preview || j.label || '').slice(0, 50)) + '</td>' +
           '<td class="st-' + j.state + '">' + j.state + '</td>' +
           '<td>' + prog + '</td>' +
           '<td>' + fmtDur(j.elapsed) + '</td>' +
@@ -307,7 +581,7 @@
   }
 
   // ---------------- Voice Clone ----------------
-  var CL = { installJob: null, settingsLoaded: false };
+  var CL = { installJob: null, settingsLoaded: false, canAddVoice: true };
 
   function fmtBytes(n) {
     if (!n) return '0 B';
@@ -326,22 +600,41 @@
   function loadClones(recheck) {
     fetch('/api/admin/clone_status' + (recheck ? '?recheck=1' : ''))
       .then(guard).then(function (r) { return r.json(); }).then(function (d) {
+        CL.canAddVoice = d.can_add_voice !== false;
+        CL.canMakeStyles = !!d.can_make_styles;
+        var sb = document.getElementById('cl_styles_all');
+        sb.disabled = !(CL.canAddVoice && CL.canMakeStyles) || !!CL.stylesJob;
+        sb.title = CL.canMakeStyles ? sb.title : 'Cần máy chủ có GPU NVIDIA + model Chatterbox';
+        var all = d.profiles || [];
         renderCloneStatus(d);
-        renderCloneProfiles(d.profiles || []);
+        renderCloneProfiles(all.filter(function (p) { return p.approval !== 'pending'; }));
+        renderPendingVoices(all.filter(function (p) { return p.approval === 'pending'; }));
         if (!CL.settingsLoaded) { fillCloneSettings(d); CL.settingsLoaded = true; }
       }).catch(function () {});
   }
 
   function renderCloneStatus(d) {
+    var profs = d.profiles || [];
+    var nPending = profs.filter(function (p) { return p.approval === 'pending'; }).length;
+    profs = profs.filter(function (p) { return p.approval !== 'pending'; });
+    var viCount = profs.filter(function (p) { return p.lang === 'vi'; }).length;
+    var enCount = profs.length - viCount;
     var chips = [
       d.ready ? 'Sẵn sàng dùng' : 'Chưa sẵn sàng',
       'Chất lượng: ' + d.quality.nfe_step + ' bước',
       d.worker.running ? ('Engine đang chạy · ' + (d.worker.device || '?')) : 'Engine chưa nạp',
-      (d.profiles ? d.profiles.length : 0) + ' giọng đã nhân bản'
+      viCount + ' giọng Việt · ' + enCount + ' giọng Anh' + (nPending ? ' · ' + nPending + ' chờ duyệt' : ''),
+      CL.canAddVoice ? 'Máy chủ: Được phép thêm/xóa giọng' : 'Máy trạm: Chỉ xem (thêm/xóa trên máy chủ)'
     ];
+    if (window.PERSONAL) chips.pop();            // ban ca nhan: khong co may tram
     document.getElementById('cl_chips').innerHTML = chips.map(function (c) {
       return '<span class="chip">' + esc(c) + '</span>';
     }).join('');
+
+    var hostForm = document.getElementById('cl_host_form');
+    var clText = document.getElementById('cl_text');
+    if (hostForm) hostForm.style.display = CL.canAddVoice ? 'flex' : 'none';
+    if (clText) clText.style.display = CL.canAddVoice ? 'block' : 'none';
 
     var rows = [];
     var e = d.engine || {};
@@ -372,6 +665,7 @@
     var st = d.settings || {};
     if (st.quality) document.getElementById('cl_quality').value = st.quality;
     if (st.device) document.getElementById('cl_device').value = st.device;
+    document.getElementById('cl_engine').value = st.engine || '';
     document.getElementById('cl_norm').checked = st.normalize !== false;
     document.getElementById('cl_trim').checked = st.trim !== false;
   }
@@ -380,6 +674,7 @@
     var body = {
       quality: document.getElementById('cl_quality').value || null,
       device: document.getElementById('cl_device').value || null,
+      engine: document.getElementById('cl_engine').value || null,
       normalize: document.getElementById('cl_norm').checked,
       trim: document.getElementById('cl_trim').checked
     };
@@ -395,28 +690,51 @@
     }).catch(function () { msg.textContent = 'Lỗi lưu thiết lập.'; });
   }
 
-  ['cl_quality', 'cl_device', 'cl_norm', 'cl_trim'].forEach(function (id) {
+  ['cl_engine', 'cl_quality', 'cl_device', 'cl_norm', 'cl_trim'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', saveCloneSettings);
   });
+
+  // diem GIONG GIONG (ban clone so voi giong that): xanh >= 88%, cam 80-88%, do < 80%
+  function simBadge(v) {
+    if (v == null) return '';
+    var pct = Math.round(v * 100);
+    var col = v >= 0.88 ? 'var(--ok, #16a34a)' : (v >= 0.80 ? '#d97706' : 'var(--err)');
+    return '<span class="chip" title="Độ giống giọng của bản clone so với giọng gốc" style="font-size:10px;padding:2px 6px;color:' +
+      col + ';border-color:' + col + '">giống giọng ' + pct + '%</span>';
+  }
 
   function renderCloneProfiles(profiles) {
     var tb = document.getElementById('clones');
     if (!profiles.length) {
-      tb.innerHTML = '<tr><td colspan="4" class="muted">Chưa có giọng nào — tải lên một mẫu 6–12 giây là xong.</td></tr>';
+      tb.innerHTML = '<tr><td colspan="4" class="muted">Chưa có hồ sơ giọng nào.</td></tr>';
       return;
     }
     tb.innerHTML = '';
     profiles.forEach(function (p) {
       var tr = document.createElement('tr');
       var warn = (p.warnings || []).join(' · ');
+      var langBadge = p.lang === 'vi' ? 'VI' : 'EN';
+      var srcInfo = [];
+      if (p.from_video) srcInfo.push('từ video');
+      if (p.created_by) srcInfo.push('bởi @' + p.created_by);
+      if (p.sample_match != null) srcInfo.push('độ khớp ' + Math.round(p.sample_match * 100) + '%');
+      var sa = p.styles_auto || {};
+      var styleLabels = (p.styles || []).map(function (s) {
+        var lb = s === 'hype' ? 'hào hứng' : (s === 'calm' ? 'trầm dịu' : s);
+        return sa[s] != null ? lb + ' (tự tạo ' + Math.round(sa[s] * 100) + '%)' : lb;
+      });
       tr.innerHTML =
-        '<td><b>🎤 ' + esc(p.name) + '</b>' +
-        (p.state === 'processing' ? '<br><span class="muted" style="font-size:11px">đang chuẩn bị mẫu…</span>' : '') +
+        '<td><b>' + esc(p.name) + '</b> <span class="chip" style="font-size:10px;padding:2px 6px">' + langBadge + '</span> ' + simBadge(p.voice_sim) +
+        (srcInfo.length ? '<br><span class="muted" style="font-size:11px">' + esc(srcInfo.join(' · ')) + '</span>' : '') +
+        (p.state === 'processing' ? '<br><span class="muted" style="font-size:11px">đang xử lý mẫu…</span>' : '') +
         (warn ? '<br><span class="muted" style="font-size:11px">' + esc(warn) + '</span>' : '') +
         (p.error ? '<br><span style="color:var(--err);font-size:11px">' + esc(p.error) + '</span>' : '') +
         '</td>' +
         '<td>' + (p.duration ? p.duration.toFixed(1) + 's' : '<span class="muted">?</span>') +
-        (p.trimmed ? '<br><span class="muted" style="font-size:11px">đã cắt ngắn</span>' : '') + '</td>' +
+        (p.from_long ? '<br><span class="muted" style="font-size:11px">trích xuất tự động</span>'
+          : (p.trimmed ? '<br><span class="muted" style="font-size:11px">đã cắt ngắn</span>' : '')) +
+        (styleLabels.length ? '<br><span class="muted" style="font-size:11px">sắc thái: ' +
+          esc(styleLabels.join(', ')) + '</span>' : '') + '</td>' +
         '<td style="max-width:260px"><span class="muted" style="font-size:12px">' +
         esc((p.ref_text || '—').slice(0, 120)) + '</span>' +
         (p.ref_text_source ? '<br><span class="muted" style="font-size:11px">nguồn: ' +
@@ -455,30 +773,170 @@
       });
       cell.appendChild(play);
 
-      var del = document.createElement('button');
-      del.className = 'btn';
-      del.textContent = 'Xóa';
-      var timer = null;
-      del.addEventListener('click', function () {
-        if (del.dataset.arm !== '1') {
-          del.dataset.arm = '1'; del.textContent = 'Chắc chắn xóa?';
-          del.style.color = 'var(--err)'; del.style.borderColor = 'var(--err)';
-          timer = setTimeout(function () {
-            del.dataset.arm = ''; del.textContent = 'Xóa';
-            del.style.color = ''; del.style.borderColor = '';
-          }, 3000);
-          return;
-        }
-        clearTimeout(timer);
-        fetch('/api/admin/clone_delete', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: p.name })
-        }).then(function () { loadClones(); });
-      });
-      cell.appendChild(del);
+      var noEmo = (p.styles || []).indexOf('hype') < 0 && (p.styles || []).indexOf('calm') < 0;
+      if (CL.canAddVoice && CL.canMakeStyles && p.lang === 'en' && noEmo) {
+        var mk = document.createElement('button');
+        mk.className = 'btn';
+        mk.style.marginRight = '8px';
+        mk.textContent = 'Tạo mẫu cảm xúc';
+        mk.addEventListener('click', function () { makeStyles({ name: p.name }, mk); });
+        cell.appendChild(mk);
+      }
+
+      if (CL.canAddVoice) {
+        var del = document.createElement('button');
+        del.className = 'btn';
+        del.textContent = 'Xóa';
+        var timer = null;
+        del.addEventListener('click', function () {
+          if (del.dataset.arm !== '1') {
+            del.dataset.arm = '1'; del.textContent = 'Chắc chắn xóa?';
+            del.style.color = 'var(--err)'; del.style.borderColor = 'var(--err)';
+            timer = setTimeout(function () {
+              del.dataset.arm = ''; del.textContent = 'Xóa';
+              del.style.color = ''; del.style.borderColor = '';
+            }, 3000);
+            return;
+          }
+          clearTimeout(timer);
+          fetch('/api/admin/clone_delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: p.name })
+          }).then(function () { loadClones(); });
+        });
+        cell.appendChild(del);
+      }
       tb.appendChild(tr);
     });
   }
+
+  // ---------- GIONG CHO DUYET ----------
+  var _pendingSig = null;
+  function anyPlaying(root) {
+    return Array.prototype.some.call(root.querySelectorAll('audio'), function (a) { return !a.paused; });
+  }
+
+  function renderPendingVoices(list) {
+    var tb = document.getElementById('pending_voices');
+    document.getElementById('pending_count').textContent = String(list.length);
+    // chi ve lai khi du lieu doi va khong ai dang nghe — tranh cat ngang trinh phat
+    var sig = JSON.stringify(list.map(function (p) {
+      return [p.name, p.state, p.has_sample, p.sample_match, p.error];
+    })) + '|' + CL.canAddVoice;
+    if (sig === _pendingSig || anyPlaying(tb)) return;
+    _pendingSig = sig;
+    if (!list.length) {
+      tb.innerHTML = '<tr><td colspan="5" class="muted">Không có giọng nào chờ duyệt.</td></tr>';
+      return;
+    }
+    tb.innerHTML = '';
+    list.forEach(function (p) {
+      var tr = document.createElement('tr');
+      var busy = p.state === 'processing';
+      var info = [];
+      if (p.duration) info.push(p.duration.toFixed(1) + 's');
+      if (p.voice_sim != null) info.push('giống giọng ' + Math.round(p.voice_sim * 100) + '%');
+      if (p.sample_match != null) info.push('độ khớp ' + Math.round(p.sample_match * 100) + '%');
+      if ((p.styles || []).length) info.push((p.styles || []).length + ' sắc thái');
+      tr.innerHTML =
+        '<td><b>' + esc(p.name) + '</b> <span class="chip" style="font-size:10px;padding:2px 6px">' + (p.lang === 'vi' ? 'VI' : 'EN') + '</span>' +
+          (p.from_video ? '<br><span class="muted" style="font-size:11px">từ video</span>' : '') + '</td>' +
+        '<td><b>@' + esc(p.created_by || '?') + '</b><br><span class="muted" style="font-size:11px">' + fmtTime(p.created) + '</span></td>' +
+        '<td style="min-width:170px; max-width:260px"><span style="font-size:12px">' + esc(info.join(' · ') || '—') + '</span>' +
+          (busy ? '<br><span class="muted" style="font-size:11px">đang xử lý mẫu…</span>' : '') +
+          ((p.warnings || []).length ? '<br><span class="muted" style="font-size:11px">' + esc(p.warnings.join(' · ')) + '</span>' : '') +
+          (p.error ? '<br><span style="color:var(--err);font-size:11px">' + esc(p.error) + '</span>' : '') + '</td>' +
+        '<td style="min-width:220px"></td><td style="white-space:nowrap"></td>';
+      var playCell = tr.children[3], actCell = tr.children[4];
+      if (p.has_sample) {
+        var au = document.createElement('audio');
+        au.controls = true; au.preload = 'none';
+        au.style.cssText = 'width:220px; height:32px';
+        au.src = '/api/clone_test_audio?name=' + encodeURIComponent(p.name) + '&t=' + (p.created || 0);
+        playCell.appendChild(au);
+      } else {
+        playCell.innerHTML = '<span class="muted" style="font-size:12px">' + (busy ? 'đang tạo bản nghe thử…' : 'chưa có bản nghe thử') + '</span>';
+      }
+      if (!CL.canAddVoice) {
+        actCell.innerHTML = '<span class="muted" style="font-size:12px">Duyệt trên máy chủ</span>';
+      } else {
+        var ok = document.createElement('button');
+        ok.className = 'btn';
+        ok.style.marginRight = '6px';
+        ok.textContent = 'Phê duyệt';
+        ok.disabled = busy;
+        ok.addEventListener('click', function () {
+          ok.disabled = true;
+          voiceAction('/api/admin/clone_approve', p.name, 'Đã duyệt giọng ' + p.name + '.');
+        });
+        actCell.appendChild(ok);
+
+        var no = document.createElement('button');
+        no.className = 'btn';
+        no.textContent = 'Từ chối';
+        var t = null;
+        no.addEventListener('click', function () {
+          if (no.dataset.arm !== '1') {
+            no.dataset.arm = '1'; no.textContent = 'Xóa giọng này?';
+            no.style.color = 'var(--err)'; no.style.borderColor = 'var(--err)';
+            t = setTimeout(function () {
+              no.dataset.arm = ''; no.textContent = 'Từ chối';
+              no.style.color = ''; no.style.borderColor = '';
+            }, 3000);
+            return;
+          }
+          clearTimeout(t);
+          no.disabled = true;
+          voiceAction('/api/admin/clone_delete', p.name, 'Đã từ chối và xóa giọng ' + p.name + '.');
+        });
+        actCell.appendChild(no);
+      }
+      tb.appendChild(tr);
+    });
+  }
+
+  function voiceAction(url, name, okText) {
+    var msg = document.getElementById('pending_msg');
+    fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        msg.textContent = res.ok ? okText : ('Lỗi: ' + (res.j.error || ''));
+        _pendingSig = null;
+        loadClones();
+      }).catch(function () { msg.textContent = 'Lỗi mạng.'; _pendingSig = null; loadClones(); });
+  }
+
+  // ---------- TU TAO MAU CAM XUC (Chatterbox GPU) ----------
+  function makeStyles(body, btn) {
+    var msg = document.getElementById('cl_setupmsg'), log = document.getElementById('cl_log');
+    btn.disabled = true;
+    fetch('/api/admin/clone_make_styles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { msg.textContent = 'Lỗi: ' + (res.j.error || ''); btn.disabled = false; return; }
+        CL.stylesJob = res.j.job;
+        msg.textContent = 'Đang tạo mẫu cảm xúc cho ' + res.j.count + ' giọng (GPU ~1 phút/giọng)…';
+        log.style.display = 'block';
+        var iv = setInterval(function () {
+          fetch('/api/admin/jobs').then(function (r) { return r.json(); }).then(function (d) {
+            var j = (d.jobs || []).filter(function (x) { return x.id === CL.stylesJob; })[0];
+            if (!j) return;
+            if (j.log) log.textContent = j.log.join('\n');
+            msg.textContent = 'Mẫu cảm xúc: ' + j.done + '/' + (j.total || '?') + ' giọng';
+            if (j.state === 'running') return;
+            clearInterval(iv); CL.stylesJob = null; btn.disabled = false;
+            msg.textContent = j.state === 'error' ? 'Lỗi: ' + (j.error || '') : 'Xong — xem nhật ký bên dưới.';
+            loadClones();
+          }).catch(function () {});
+        }, 2000);
+      }).catch(function () { btn.disabled = false; msg.textContent = 'Lỗi mạng.'; });
+  }
+  document.getElementById('cl_styles_all').addEventListener('click', function () {
+    makeStyles({ all: true }, this);
+  });
 
   function pollJob(id, done) {
     var iv = setInterval(function () {
@@ -555,18 +1013,24 @@
 
   document.getElementById('cl_add').addEventListener('click', function () {
     var msg = document.getElementById('cl_msg');
+    if (!CL.canAddVoice) {
+      msg.textContent = 'Chỉ máy chủ (Host) mới được phép thêm hồ sơ giọng.';
+      return;
+    }
     var files = document.getElementById('cl_file').files;
     var baseName = document.getElementById('cl_name').value.trim();
     var text = document.getElementById('cl_text').value.trim();
+    var lang = document.getElementById('cl_lang').value || 'vi';
+    var trimStart = document.getElementById('cl_trim_start').value.trim();
+    var trimEnd = document.getElementById('cl_trim_end').value.trim();
+    var denoise = document.getElementById('cl_denoise').checked ? '1' : '0';
     if (!files.length) {
-      msg.textContent = 'Cần chọn file mẫu âm thanh (có thể chọn nhiều).';
+      msg.textContent = 'Cần chọn file video hoặc âm thanh mẫu.';
       return;
     }
     
-    // Lưu lại script để lần sau tự động có sẵn không cần gõ lại
-    if (text) {
-      localStorage.setItem('default_clone_script', text);
-    }
+    // Script mau CHI dung cho dung 1 file
+    if (files.length > 1) text = '';
     
     var btn = document.getElementById('cl_add');
     btn.disabled = true;
@@ -575,23 +1039,29 @@
     
     function uploadNext() {
       if (i >= files.length) {
-        msg.textContent = errors.length ? 'Có lỗi: ' + errors.join(', ') : 'Đã tạo ' + files.length + ' giọng thành công!';
+        msg.textContent = errors.length ? 'Có lỗi: ' + errors.join(', ') : 'Đã tạo ' + files.length + ' hồ sơ giọng — đang phân tích ngữ điệu và tạo bản nghe thử.';
         btn.disabled = false;
+        document.getElementById('cl_text').value = '';
         loadClones();
         return;
       }
       
       var f = files[i];
-      // Tự lấy tên file làm tên giọng nếu bỏ trống, hoặc nếu chọn nhiều file thì bắt buộc lấy tên file để tránh trùng
       var vname = (files.length === 1 && baseName) ? baseName : f.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
       if (vname.length < 2) vname = vname + "_voice";
       vname = vname.slice(0, 24);
       
       msg.textContent = 'Đang xử lý mẫu ' + (i + 1) + '/' + files.length + ' (' + vname + ')…';
       
-      fetch('/api/admin/clone_add?name=' + encodeURIComponent(vname) +
-            '&ref_text=' + encodeURIComponent(text) +
-            '&filename=' + encodeURIComponent(f.name), { method: 'POST', body: f })
+      var qs = 'name=' + encodeURIComponent(vname) +
+               '&lang=' + encodeURIComponent(lang) +
+               '&denoise=' + denoise +
+               '&ref_text=' + encodeURIComponent(text) +
+               '&filename=' + encodeURIComponent(f.name);
+      if (trimStart !== '') qs += '&trim_start=' + encodeURIComponent(trimStart);
+      if (trimEnd !== '') qs += '&trim_end=' + encodeURIComponent(trimEnd);
+
+      fetch('/api/admin/clone_add?' + qs, { method: 'POST', body: f })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok) errors.push(vname + ': ' + (res.j.error || 'Lỗi'));
@@ -608,20 +1078,32 @@
     uploadNext();
   });
 
-  // Tự động tải lại script cũ nếu có
-  var savedScript = localStorage.getItem('default_clone_script');
-  if (savedScript) {
-    document.getElementById('cl_text').value = savedScript;
-  }
+  try { localStorage.removeItem('default_clone_script'); } catch (e) {}
 
-  loadStatus(); loadJobs(); loadClones();
+  loadStatus(); loadJobs(); loadClones(); loadGenHistory();
   fetch('/api/me').then(function (r) { return r.json(); })
-    .then(function (m) { myName = m.user; })
+    .then(function (m) {
+      myName = m.user;
+      window.PERSONAL = !!m.personal;
+      if (m.personal) {                 // ban ca nhan: an phan danh cho doanh nghiep
+        var ch = document.querySelector('#clonecard h2'); if (ch) ch.textContent = 'Kho giọng clone';
+        ['auditcard', 'pendingcard', 'userscard'].forEach(function (id) {
+          var el = document.getElementById(id); if (el) el.style.display = 'none';
+        });
+        var h = document.querySelector('.admin-title h1'); if (h) h.textContent = 'Cài đặt';
+        var sub = document.querySelector('.admin-title .sub');
+        if (sub) sub.textContent = 'Engine giọng · Kho giọng clone · AI biên kịch · Model Whisper';
+        if (m.auto_login) { var lo = document.getElementById('logout'); if (lo) lo.style.display = 'none'; }
+        document.title = 'Cài đặt — ' + document.title.replace(/^[^—]*—\s*/, '');
+      }
+    })
     .catch(function () {})
     .then(loadUsers);
   setInterval(loadStatus, 4000);
   setInterval(function () { loadClones(); }, 6000);
   setInterval(loadJobs, 2000);
+  setInterval(loadGenHistory, 3500);
+  setInterval(loadUsers, 6000);
 })();
 </script>
 </body>

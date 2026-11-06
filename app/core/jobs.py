@@ -5,6 +5,7 @@ Moi viec nang (phien am, dich, tao giong) chay trong thread rieng va cap nhat
 tien do vao job dict de tang web tra ve cho UI poll.
 """
 
+import json
 import os
 import tempfile
 import threading
@@ -14,20 +15,28 @@ from pathlib import Path
 from ..config import JOB_KEEP
 from . import clone, engine, translate, tts, video
 
+HISTORY_DIR = Path(__file__).resolve().parents[2] / "data" / "job_history"
+HISTORY_MAX = 100
+
 
 class JobManager(object):
     def __init__(self, keep=JOB_KEEP):
         self._jobs = {}
         self._lock = threading.Lock()
+        self._hlock = threading.Lock()
         self._next = 0
         self._keep = keep
 
     # ---------- vong doi job ----------
 
-    def _new(self, kind, label):
+    def _new(self, kind, label, owner=None, voice=None, full_script=None, rate=None):
         with self._lock:
             self._next += 1
+            scr = (full_script or "").strip()
             job = {"id": str(self._next), "kind": kind, "label": label,
+                   "owner": owner or "admin", "voice": voice or "",
+                   "rate": rate or "+0%", "char_count": len(scr),
+                   "full_script": scr,
                    "state": "running", "phase": "", "done": 0, "total": 0,
                    "phase_started": time.time(), "created": time.time(),
                    "finished": None, "error": None, "result": None,
@@ -53,13 +62,146 @@ class JobManager(object):
     def _set_phase(job, phase):
         job.update(phase=phase, done=0, total=0, phase_started=time.time())
 
-    @staticmethod
-    def _finish(job, error=None):
+    def _finish(self, job, error=None):
         job["finished"] = time.time()
         if error:
             job.update(state="error", error=error)
         else:
             job["state"] = "done"
+            if job.get("kind") in ("text_dub", "render") and job.get("audio"):
+                try:
+                    self._record_history(job)
+                except Exception:
+                    pass
+
+    def _record_history(self, job):
+        """Luu lich su 'Nhan vien da Gen cai gi' (kich ban day du + file audio) vao data/job_history."""
+        HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        hist_id = "%d_%s" % (int(job["created"]), job["id"])
+        mime = job.get("mime") or "audio/wav"
+        ext = "mp3" if "mpeg" in mime else "m4a" if "mp4" in mime else "wav"
+        audio_fn = "gen_%s.%s" % (hist_id, ext)
+        audio_path = HISTORY_DIR / audio_fn
+        audio_bytes = job.get("audio") or b""
+        audio_path.write_bytes(audio_bytes)
+        scr = (job.get("full_script") or "").strip()
+        entry = {
+            "id": hist_id,
+            "job_id": job["id"],
+            "owner": job.get("owner") or "admin",
+            "kind": job["kind"],
+            "label": job.get("label") or "",
+            "voice": job.get("voice") or "",
+            "rate": job.get("rate") or "+0%",
+            "char_count": len(scr) or job.get("char_count") or 0,
+            "script_preview": scr[:160] + ("…" if len(scr) > 160 else ""),
+            "full_script": scr,
+            "created": job["created"],
+            "finished": job["finished"],
+            "elapsed": round((job["finished"] or time.time()) - job["created"], 1),
+            "audio_file": audio_fn,
+            "audio_kb": len(audio_bytes) // 1024,
+            "mime": mime,
+            "state": "done",
+        }
+        with self._hlock:
+            items = self._load_history_raw()
+            items.insert(0, entry)
+            while len(items) > HISTORY_MAX:
+                old = items.pop()
+                if old.get("audio_file"):
+                    try:
+                        (HISTORY_DIR / old["audio_file"]).unlink()
+                    except OSError:
+                        pass
+            tmp = HISTORY_DIR / "history.json.tmp"
+            tmp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp, HISTORY_DIR / "history.json")
+
+    @staticmethod
+    def _load_history_raw():
+        p = HISTORY_DIR / "history.json"
+        if not p.exists():
+            return []
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+
+    def list_history(self, limit=60, owner=None):
+        """Danh sach lich su Gen kich ban & Audio cho Truong phong (/admin)."""
+        live = []
+        for job in sorted(self._jobs.values(), key=lambda j: -int(j["id"])):
+            if job.get("kind") not in ("text_dub", "render"):
+                continue
+            if job.get("state") == "done":
+                continue
+            if owner and job.get("owner") != owner:
+                continue
+            scr = (job.get("full_script") or "").strip()
+            end = job["finished"] or time.time()
+            live.append({
+                "id": "live_" + job["id"],
+                "job_id": job["id"],
+                "owner": job.get("owner") or "admin",
+                "kind": job["kind"],
+                "label": job.get("label") or "",
+                "voice": job.get("voice") or "",
+                "rate": job.get("rate") or "+0%",
+                "char_count": len(scr) or job.get("char_count") or 0,
+                "script_preview": scr[:160] + ("…" if len(scr) > 160 else ""),
+                "full_script": scr,
+                "created": job["created"],
+                "finished": job["finished"],
+                "elapsed": round(end - job["created"], 1),
+                "audio_kb": len(job["audio"]) // 1024 if job.get("audio") else 0,
+                "mime": job.get("mime") or "audio/wav",
+                "state": job["state"],
+                "phase": job.get("phase") or "",
+                "done": job.get("done") or 0,
+                "total": job.get("total") or 0,
+                "error": job.get("error"),
+            })
+        saved = self._load_history_raw()
+        if owner:
+            saved = [x for x in saved if x.get("owner") == owner]
+        return (live + saved)[:limit]
+
+    def get_history_audio(self, hist_id):
+        """Lay (bytes, mime, filename) cua 1 ban ghi trong lich su Gen."""
+        for x in self._load_history_raw():
+            if x.get("id") == hist_id or x.get("job_id") == hist_id:
+                fn = x.get("audio_file")
+                if fn and (HISTORY_DIR / fn).exists():
+                    return (HISTORY_DIR / fn).read_bytes(), x.get("mime") or "audio/wav", fn
+        job = self.get(hist_id.replace("live_", ""))
+        if job and job.get("audio"):
+            mime = job.get("mime") or "audio/wav"
+            ext = "mp3" if "mpeg" in mime else "m4a" if "mp4" in mime else "wav"
+            return job["audio"], mime, "dub_%s.%s" % (job["id"], ext)
+        return None, None, None
+
+    def delete_history(self, hist_id):
+        with self._hlock:
+            items = self._load_history_raw()
+            keep = []
+            removed = False
+            for x in items:
+                if x.get("id") == hist_id:
+                    removed = True
+                    if x.get("audio_file"):
+                        try:
+                            (HISTORY_DIR / x["audio_file"]).unlink()
+                        except OSError:
+                            pass
+                else:
+                    keep.append(x)
+            if removed:
+                HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+                tmp = HISTORY_DIR / "history.json.tmp"
+                tmp.write_text(json.dumps(keep, ensure_ascii=False, indent=2), encoding="utf-8")
+                os.replace(tmp, HISTORY_DIR / "history.json")
+            return removed
 
     def get(self, job_id):
         return self._jobs.get(job_id)
@@ -75,8 +217,13 @@ class JobManager(object):
         out = []
         for job in sorted(self._jobs.values(), key=lambda j: -int(j["id"])):
             end = job["finished"] or time.time()
+            scr = (job.get("full_script") or "").strip()
             out.append({
                 "id": job["id"], "kind": job["kind"], "label": job["label"],
+                "owner": job.get("owner") or "admin",
+                "voice": job.get("voice") or "",
+                "char_count": len(scr) or job.get("char_count") or 0,
+                "script_preview": scr[:120] + ("…" if len(scr) > 120 else ""),
                 "state": job["state"], "phase": job["phase"],
                 "done": job["done"], "total": job["total"],
                 "created": job["created"], "elapsed": round(end - job["created"], 1),
@@ -91,17 +238,18 @@ class JobManager(object):
         return {"total": len(states),
                 "running": states.count("running"),
                 "done": states.count("done"),
-                "error": states.count("error")}
+                "error": states.count("error"),
+                "history_total": len(self._load_history_raw())}
 
     # ---------- cac loai job ----------
 
-    def start_prepare(self, media_tmp, filename, model_name, language, target):
+    def start_prepare(self, media_tmp, filename, model_name, language, target, owner=None):
         """Buoc 1 tron goi: phien am -> cat doan giu timestamp -> dich tung doan.
 
         File goc duoc GIU LAI (job["media_path"]) de buoc render ghep video
         khong phai upload lai; job prepare cu hon bi don file goc.
         """
-        job = self._new("prepare", filename)
+        job = self._new("prepare", filename, owner=owner)
         job["media_path"] = media_tmp
         with self._lock:  # chi giu file goc cua job prepare moi nhat (job dang chay thi tha)
             for other in self._jobs.values():
@@ -154,7 +302,7 @@ class JobManager(object):
         threading.Thread(target=work, daemon=True).start()
         return job
 
-    def start_render(self, prepare_job_id, texts, voice, rate):
+    def start_render(self, prepare_job_id, texts, voice, rate, owner=None):
         """Buoc 2: doc tung doan (texts da duoc nguoi dung duyet/sua) ->
         dat dung timestamp -> ghep vao video goc (neu la video)."""
         prep = self.get(prepare_job_id)
@@ -172,7 +320,9 @@ class JobManager(object):
         final_texts = texts if texts is not None else [c["trans"] for c in cues]
         is_video = prep.get("is_video")
         total_s = (prep.get("result") or {}).get("duration") or video.duration(media)
-        job = self._new("render", "%d đoạn" % len(cues))
+        joined_script = "\n".join(final_texts)
+        job = self._new("render", "%d đoạn" % len(cues), owner=owner or prep.get("owner"),
+                        voice=voice, full_script=joined_script, rate=rate)
 
         def work():
             out_audio = tempfile.mkstemp(suffix=".m4a")[1]
@@ -211,7 +361,7 @@ class JobManager(object):
         threading.Thread(target=work, daemon=True).start()
         return job
 
-    def start_text_dub(self, text, voice, rate, target):
+    def start_text_dub(self, text, voice, rate, target, owner=None, genre=None):
         """Dich van ban (neu co target) roi doc thanh audio — khong can file media.
 
         Van ban co THE BIEU CAM ([vui], *nhan*, [nghi]...) + giong edge
@@ -227,7 +377,8 @@ class JobManager(object):
             text = expressive.vieneu_script(text)
         job = self._new("text_dub", "%d ký tự%s%s" % (
             len(text), " → " + target if target else "",
-            " · biểu cảm" if (use_expr or use_acted or has_multi) else ""))
+            " · biểu cảm" if (use_expr or use_acted or has_multi or voice.startswith("c:")) else ""),
+            owner=owner, voice=voice, full_script=text, rate=rate)
 
         def work():
             try:
@@ -266,6 +417,10 @@ class JobManager(object):
                         elif part_use_expr:
                             data, mime = expressive.synth_expressive(
                                 part_text, v, rate, target=target, progress=part_progress)
+                        elif v.startswith("c:") and not target:
+                            # giong clone: giu the -> co bieu cam that
+                            data, mime, _ = tts.synth(part_text, v, rate, progress=part_progress,
+                                                      genre=genre)
                         else:
                             current = expressive.strip_tags(part_text)
                             if target:
@@ -307,7 +462,8 @@ class JobManager(object):
                                      "chars": len(text), "expressive": True}
                     self._finish(job)
                     return
-                current = expressive.strip_tags(text)
+                keep_tags = voice.startswith("c:") and not target
+                current = text if keep_tags else expressive.strip_tags(text)
                 if target:
                     self._set_phase(job, "translate")
                     current = translate.translate_text(
@@ -322,7 +478,8 @@ class JobManager(object):
                 else:
                     data, mime, _ = tts.synth(
                         current, voice, rate,
-                        progress=lambda d, t: job.update(done=d, total=t))
+                        progress=lambda d, t: job.update(done=d, total=t),
+                        genre=genre if keep_tags else None)
                 job.update(audio=data, mime=mime)
                 job["result"] = {"translated": job.get("translated"),
                                  "mime": mime, "chars": len(current)}
@@ -333,7 +490,7 @@ class JobManager(object):
         threading.Thread(target=work, daemon=True).start()
         return job
 
-    def start_annotate(self, text, target):
+    def start_annotate(self, text, target, genre=None):
         """AI bien kich chay NEN — van ban dai (den 100k) co tien do tung phan."""
         from . import expressive
         job = self._new("annotate", "%d ký tự" % len(text))
@@ -341,10 +498,12 @@ class JobManager(object):
         def work():
             try:
                 self._set_phase(job, "annotate")
+                rep = {}
                 out, note = expressive.auto_annotate(
                     text, target,
-                    progress=lambda d, t: job.update(done=d, total=t))
-                job["result"] = {"text": out, "note": note}
+                    progress=lambda d, t: job.update(done=d, total=t), report=rep,
+                    genre=genre)
+                job["result"] = {"text": out, "note": note, "report": rep}
                 self._finish(job)
             except Exception as e:
                 self._finish(job, "Loi bien kich: %s" % e)
@@ -403,6 +562,35 @@ class JobManager(object):
                 self._finish(job)
             except Exception as e:
                 self._finish(job, "Khong tao duoc ban nghe thu: %s" % e)
+
+        threading.Thread(target=work, daemon=True).start()
+        return job
+
+    def start_clone_styles(self, names, force=False):
+        """Tu tao mau cam xuc (hype/calm) cho cac giong Anh con thieu — chay nen, co nhat ky."""
+        job = self._new("clone_styles", "mẫu cảm xúc %d giọng" % len(names))
+        job["log"] = []
+
+        def say(msg):
+            job["log"] = (job["log"] + [msg])[-200:]
+
+        def work():
+            try:
+                self._set_phase(job, "styles")
+                job["total"] = len(names)
+                results = {}
+                for i, n in enumerate(names):
+                    say("== %s (%d/%d)" % (n, i + 1, len(names)))
+                    try:
+                        results[n] = clone.make_emotion_styles(n, force=force, say=say)
+                    except Exception as e:
+                        results[n] = {"error": str(e)}
+                        say("  lỗi: %s" % e)
+                    job.update(done=i + 1)
+                job["result"] = {"styles": results}
+                self._finish(job)
+            except Exception as e:
+                self._finish(job, "Khong tao duoc mau cam xuc: %s" % e)
 
         threading.Thread(target=work, daemon=True).start()
         return job

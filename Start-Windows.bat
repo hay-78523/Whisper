@@ -1,8 +1,55 @@
 @echo off
 rem Khoi dong Whisper STT tren Windows - nhay dup chuot vao file nay la chay.
-rem Lan dau se tu cai thu vien (can mang, vai phut). Cac lan sau vao thang.
+rem Ban V4: da dong goi san Python + PyTorch + Voice Clone trong thu muc python\
+rem -> KHONG can cai gi, KHONG phu thuoc Python cua may (chay duoc may quan net).
 cd /d "%~dp0"
 echo === Whisper STT ===
+
+if exist "%~dp0python\python.exe" goto portable
+echo [!] Khong thay thu muc python\ (ban dong goi san) - chuyen sang che do tu cai dat.
+goto install
+
+:portable
+echo [*] Ban dong goi san: Python + PyTorch + Voice Clone - khong can cai dat.
+set "PY=%~dp0python\python.exe"
+rem Chan moi thu vien Python cua may (Python he thong / user site) chen vao
+set "PYTHONHOME="
+set "PYTHONPATH="
+set "PYTHONNOUSERSITE=1"
+set "PYTHONUTF8=1"
+set "PATH=%~dp0python;%~dp0python\Scripts;%~dp0ffmpeg-master-latest-win64-gpl-shared\bin;%PATH%"
+rem Model Whisper / vocoder tai ve luu NGAY TRONG thu muc tool (may quan net
+rem thuong xoa thu muc user khi khoi dong lai -> khong phai tai lai moi lan)
+set "HF_HOME=%~dp0data\hf_cache"
+set "KMP_DUPLICATE_LIB_OK=TRUE"
+
+echo [*] Kiem tra engine Voice Clone (lan dau co the mat 10-40 giay)...
+"%PY%" -c "import torch, f5_tts.api; print('[v] Voice Clone san sang - torch', torch.__version__)"
+if errorlevel 1 (
+    echo.
+    echo [x] Engine Voice Clone KHONG chay duoc tren may nay.
+    echo [x] 1. Giai nen lai DAY DU file zip ^(dung WinRAR / 7-Zip^), dat o thu muc ngan
+    echo [x]    vi du  D:\WhisperSTT  hoac  C:\W   - KHONG chay truc tiep trong file zip.
+    echo [x] 2. Tam tat phan mem diet virus / dong bang may neu no chan file .dll
+    echo [x] Cac tinh nang khac van chay. Chup man hinh nay gui ky thuat neu van loi.
+    echo.
+    pause
+)
+
+rem May co card NVIDIA: tu tai PyTorch ban GPU (1 lan, ~3GB) - loi thi van chay CPU
+"%PY%" setup_gpu.py
+
+rem AI local (Ollama) cho "AI bien kich": cua so rieng, khong chan tool
+start "AI local" /min "%PY%" setup_ai.py
+rem Tai model Chatterbox (giong Anh tu nhien) chay nen, chi lan dau
+start "Chatterbox" /min "%PY%" setup_chatterbox.py --wait
+
+echo [*] Khoi dong server... Trinh duyet se tu mo. Dong cua so nay la TAT ung dung.
+"%PY%" run.py --open
+pause
+exit /b
+
+:install
 
 rem -- Kiem tra va Tu dong cai Python 3.11 neu chua co --
 where py >nul 2>nul
@@ -73,6 +120,9 @@ if errorlevel 1 (
         echo [!]     python setup_clone.py
     )
 )
+
+rem May co card NVIDIA: kich hoat / tai PyTorch ban GPU
+%PY% setup_gpu.py
 
 echo [*] Khoi dong server... Trinh duyet se tu mo. Dong cua so nay la TAT ung dung.
 %PY% run.py --open
