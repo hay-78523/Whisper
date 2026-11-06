@@ -1625,10 +1625,23 @@ def _is_vietnamese(text):
     return any(c in vi for c in (text or "").lower())
 
 
-def _request(port, payload, out_dir, n_expected, progress=None, timeout=7200):
-    """Goi worker, vua cho vua bao tien do theo so file da ghi xong."""
+class EngineStalled(RuntimeError):
+    """Engine khong doc xong doan nao trong qua lau -> coi la treo (vd loi MPS/GPU)."""
+
+
+def _stall_limit(payload):
+    """So giay toi da cho 1 doan moi (khong co doan moi = treo). CPU cham hon -> cho gap doi."""
+    base = float(_cfg("CLONE_STALL_SEC", 300))
+    dev = (payload.get("device") or payload.get("prefer_device") or "").lower()
+    return base * (2 if dev == "cpu" else 1)
+
+
+def _request(port, payload, out_dir, n_expected, progress=None, timeout=7200, stall=None):
+    """Goi worker, vua cho vua bao tien do theo so file da ghi xong.
+    Khong co doan moi trong `stall` giay -> nem EngineStalled (ben goi tat worker, doc lai)."""
     result = {}
     err = [None]
+    stall = _stall_limit(payload) if stall is None else stall
 
     def call():
         try:
@@ -1650,12 +1663,18 @@ def _request(port, payload, out_dir, n_expected, progress=None, timeout=7200):
     th = threading.Thread(target=call, daemon=True)
     th.start()
     last = -1
+    moved = time.time()                    # lan cuoi co them doan doc xong
     while th.is_alive():
         time.sleep(0.8)
         done = len(list(out_dir.glob("[0-9]*.wav"))) if out_dir.is_dir() else 0
-        if progress and done != last:
+        if done != last:
             last = done
-            progress(min(done, n_expected), n_expected)
+            moved = time.time()
+            if progress:
+                progress(min(done, n_expected), n_expected)
+        elif stall and time.time() - moved > stall:
+            raise EngineStalled("Engine giọng không đọc xong đoạn nào trong %d giây — có thể bị "
+                                "treo (GPU/MPS). Tự khởi động lại và đọc lại." % stall)
     th.join()
     if err[0]:
         raise RuntimeError(err[0])
@@ -1809,11 +1828,16 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
         pending = list(items)
         retries = max(0, int(_cfg("CLONE_RETRY", 1)))
         last_error = None
-        for attempt in range(retries + 1):
+        stalled = [False]                  # lan truoc bi TREO (khong phai loi) -> doc lai cung thiet bi
+        for attempt in range(retries + 2):    # +1: bi treo -> lan cuoi chay CPU cho chac
             if not pending:
                 break
+            if attempt > retries and not stalled[0]:
+                break                          # loi thuong: giu so lan doc lai nhu cu
             if attempt:
-                say("Đọc lại %d đoạn bị lỗi (lần %d, dùng CPU)…" % (len(pending), attempt))
+                say("Đọc lại %d đoạn bị lỗi (lần %d, %s)…" % (
+                    len(pending), attempt, "khởi động lại engine" if stalled[0] and attempt <= retries
+                    else "dùng CPU"))
             # Chia LO nho va chay SONG SONG tren nhieu worker (van ban 30-40k ky tu
             # = ~80 doan). Moi lo ngan -> khong cham timeout; worker sap chi mat 1
             # lo, lo sau tu hoi sinh worker roi doc tiep.
@@ -1842,14 +1866,17 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
                     sty = batch[0].get("style") or ""
                     if sty:
                         req["ref_audio"], req["ref_text"] = style_ref(name, sty)
-                    if attempt:
-                        req["device"] = "cpu"  # lan sau chac an hon toc do
+                    if attempt and (not stalled[0] or attempt > retries):
+                        req["device"] = "cpu"  # loi that / treo lan 2: CPU cho chac
+                    # bi treo: worker moi tren CUNG thiet bi (GPU) thuong chay lai binh thuong
                     try:
                         port = ensure_worker(log=say, slot=slot)
                         res = _request(port, req, out_dir, total_n, progress=None)
                         local_bad |= {f["i"] for f in (res.get("failed") or [])}
                     except Exception as e:
                         local_err = e
+                        if isinstance(e, EngineStalled):
+                            stalled[0] = True
                         say("Engine #%d gặp sự cố: %s" % (slot + 1, e))
                         stop_worker(slot)      # lo sau tu hoi sinh worker
                         local_bad |= {it["i"] for it in batch
