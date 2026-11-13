@@ -36,8 +36,7 @@ def main(argv):
     want = [a for a in argv if not a.startswith("--")]
     names = [clone.safe_name(n) for n in want] or [
         n for n in clone.list_profiles(include_all_en=True)
-        if not clone.is_pending(n)
-        and (force or not ({"hype", "calm"} <= clone.available_styles(n)))]
+        if not clone.is_pending(n) and (force or clone.needs_styles(n))]
     if not clone.can_make_styles():
         print("[i] Khong co GPU/Chatterbox -> dung cach BIEN DOI mau goc (cham hon, cam xuc nhe hon).")
     if not names:

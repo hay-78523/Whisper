@@ -8,6 +8,8 @@ Moi ban la 1 thu muc editions/<ten>/edition.json:
 
     python3 dong_goi.py whisper              # cap nhat code moi vao zip cua ban do (vai giay)
     python3 dong_goi.py all                  # ca 3 ban
+    python3 dong_goi.py va                   # GOI VA NHO (chi code, vai MB): giai nen DE len
+                                             # thu muc dang chay tren may khach / may test
     python3 dong_goi.py starlight --tu BAN_GIAO_KHACH/1_Whisper_BanCaNhan.zip
                                              # chua co zip -> chep tu zip khac roi cap nhat
 
@@ -153,11 +155,30 @@ def run(name, src=None):
           % (zp.name, name, "CA NHAN" if ed.get("personal") else "doanh nghiep", count, mb, len(voices)))
 
 
+def make_va():
+    """Goi va: app/ + file chay o thu muc goc. KHONG dung toi du lieu khach (giong, tai khoan,
+    editions/ACTIVE) -> giai nen de len ban nao cung duoc."""
+    import time
+    repl = {}
+    walk(ROOT / "app", "app/", repl)
+    for f in TOP_FILES:
+        if (ROOT / f).is_file():
+            repl[f] = ROOT / f
+    out = OUT / ("CapNhat_Code_%s.zip" % time.strftime("%Y%m%d_%H%M"))
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for arc, p in sorted(repl.items()):
+            z.write(p, arc)
+    print("[v] %s (%.1f MB, %d file) — chep sang may kia, giai nen DE len thu muc dang chay "
+          "(chon 'Replace all'), roi chay lai." % (out.name, out.stat().st_size / 1e6, len(repl)))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ban", help="ten ban (%s) hoac all" % ", ".join(editions()))
     ap.add_argument("--tu", default=None, help="chua co zip cua ban nay -> chep tu zip nay")
     a = ap.parse_args()
+    if a.ban == "va":
+        return make_va()
     for n in (editions() if a.ban == "all" else [a.ban]):
         run(n, a.tu)
 

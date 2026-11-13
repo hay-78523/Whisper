@@ -705,8 +705,7 @@ class Handler(BaseHTTPRequestHandler):
                     p = self._json_body()
                     if p.get("all"):
                         names = [n for n in clone.list_profiles(include_all_en=True)
-                                 if not clone.is_pending(n)
-                                 and not ({"hype", "calm"} <= clone.available_styles(n))]
+                                 if not clone.is_pending(n) and clone.needs_styles(n)]
                     else:
                         names = [clone.safe_name(str(p.get("name", "")))]
                         if names[0] not in clone.list_profiles(include_all_en=True):

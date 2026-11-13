@@ -718,6 +718,8 @@ def make_emotion_styles(name, force=False, tries=3, say=None):
                            "tự tạo mẫu cảm xúc.")
     min_sim = float(_cfg("CLONE_STYLE_MIN_SIM", 0.85))
     have = available_styles(name)
+    # mau tao bang BIEN DOI (luc may chua co Chatterbox) -> lam lai bang Chatterbox cho cam xuc that
+    have = have - set(profile_meta(name).get("styles_method") or {})
     report, made = {}, []
     tmp = Path(tempfile.mkdtemp(prefix="styles_"))
     try:
@@ -760,8 +762,18 @@ def make_emotion_styles(name, force=False, tries=3, say=None):
         m = profile_meta(name)
         auto = dict(m.get("styles_auto") or {})
         auto.update({k: report[k]["sim"] for k in made})
-        _save_meta(name, styles=sorted(available_styles(name)), styles_auto=auto)
+        meth = {k: v for k, v in (m.get("styles_method") or {}).items() if k not in made}
+        _save_meta(name, styles=sorted(available_styles(name)), styles_auto=auto, styles_method=meth)
     return report
+
+
+def needs_styles(name):
+    """Giong can tao (lai) mau cam xuc: thieu hype/calm, hoac co mau BIEN DOI ma may da co
+    Chatterbox (giong Anh) -> lam lai cho cam xuc that."""
+    if not ({"hype", "calm"} <= available_styles(name)):
+        return True
+    return bool(profile_lang(name) == "en" and can_make_styles()
+                and (profile_meta(name).get("styles_method") or {}))
 
 
 # ---- cach 2 (MOI MAY, ca tieng Viet): BIEN DOI chinh mau goc thanh ban hao hung / tram.

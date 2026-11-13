@@ -595,6 +595,44 @@ def cbx_dir():
     return None
 
 
+def _ensure_pkg_resources():
+    """setuptools >= 81 da BO module pkg_resources (ban dong goi kem setuptools 84) ->
+    thu vien dong dau AI cua Chatterbox (perth) nap loi, PerthImplicitWatermarker = None
+    -> 'NoneType object is not callable'. Tao ban thay the toi thieu (chi cac ham tim file
+    trong thu vien) de bo dong dau THAT van chay — khong tat dong dau."""
+    try:
+        import pkg_resources  # noqa: F401
+        return
+    except Exception:
+        pass
+    import importlib
+    import types
+    m = types.ModuleType("pkg_resources")
+
+    def resource_filename(package, resource):
+        mod = importlib.import_module(package) if isinstance(package, str) else package
+        return os.path.join(os.path.dirname(os.path.abspath(mod.__file__)), *resource.split("/"))
+
+    def resource_stream(package, resource):
+        return open(resource_filename(package, resource), "rb")
+
+    def resource_string(package, resource):
+        with resource_stream(package, resource) as f:
+            return f.read()
+
+    def resource_exists(package, resource):
+        return os.path.exists(resource_filename(package, resource))
+
+    m.resource_filename, m.resource_stream = resource_filename, resource_stream
+    m.resource_string, m.resource_exists = resource_string, resource_exists
+    sys.modules["pkg_resources"] = m
+    old = sys.modules.get("perth")              # perth da nap loi truoc do -> nap lai
+    if old is not None and getattr(old, "PerthImplicitWatermarker", None) is None:
+        for k in [k for k in sys.modules if k == "perth" or k.startswith("perth.")]:
+            del sys.modules[k]
+    log("Thieu pkg_resources (setuptools moi) -> dung ban thay the cho bo dong dau perth.")
+
+
 def get_cbx(device):
     if CBX.model is not None and CBX.device == device:
         return CBX.model
@@ -602,6 +640,11 @@ def get_cbx(device):
     if d is None:
         raise RuntimeError("Thieu model Chatterbox (thu muc models_chatterbox)")
     _patch_torchaudio()
+    _ensure_pkg_resources()
+    import perth
+    if getattr(perth, "PerthImplicitWatermarker", None) is None:
+        raise RuntimeError("Bo dong dau AI cua Chatterbox (perth) khong nap duoc — gui "
+                           "data/logs/clone_worker.log cho ky thuat.")
     from chatterbox.tts import ChatterboxTTS
     log("Nap Chatterbox tu %s tren %s ..." % (d, device))
     t = time.time()
