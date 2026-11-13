@@ -107,7 +107,17 @@ def _ollama_model():
     model = None
     try:
         import requests
-        r = requests.get(config.OLLAMA_URL + "/api/tags", timeout=1.5)
+        # may dang ban (dang tao giong tren GPU) -> Ollama tra loi cham: cho lau hon + thu lai,
+        # khong ket luan "Ollama tat" chi vi 1 lan cham
+        r = None
+        for wait in (4, 10):
+            try:
+                r = requests.get(config.OLLAMA_URL + "/api/tags", timeout=wait)
+                break
+            except requests.exceptions.Timeout:
+                continue
+        if r is None:
+            raise RuntimeError("Ollama khong tra loi")
         tags = [m["name"] for m in r.json().get("models", [])]
         _ollama_state.update(online=True, models=tags)
         usable = [t for t in tags if t not in _ollama_state["skip"]] or tags

@@ -596,11 +596,13 @@ def _fast_prompt(sents, target, ctx=""):
         "bình tĩnh, tự tin, lo lắng, ngại ngùng, thất vọng, lãng mạn, kịch tính, hồi hộp, hét, nghẹn ngào, "
         "buồn ngủ, quảng cáo, nhẹ nhõm, khó chịu, trầm ngâm, phản diện, trẻ con, già, nghi ngờ, tinh nghịch.\n"
         "Thẻ ngắt (tuỳ chọn, thêm sau thẻ tông): nghỉ, nghỉ dài.\n"
-        "LUẬT: chỉ gắn thẻ ở câu mà TÔNG GIỌNG ĐỔI so với câu trước (khoảng 1 trong 4-5 câu); "
-        "câu tiếp tục cùng tông thì KHÔNG trả về. Tối đa 1 thẻ tông mỗi câu. "
-        "Từ nhấn: rất hiếm, 1-2 từ, chỉ khi thật quan trọng. "
+        "LUẬT: đổi tông theo MẠCH CẢM XÚC của bài — khoảng mỗi 1-2 câu một thẻ tông, KHÔNG để quá "
+        "3 câu liền nhau cùng một tông (nghe đều đều như máy). Tối đa 1 thẻ tông mỗi câu. "
+        "Từ nhấn: cứ 2-3 câu chọn 1 cụm 1-3 từ quan trọng nhất (tên sản phẩm, con số, lợi ích chính, "
+        "chi tiết then chốt) — chép ĐÚNG nguyên văn cụm đó trong câu. "
+        "Thẻ [nghỉ]: thêm sau câu mở đầu gây tò mò và ngay trước câu chốt / tiết lộ; KHÔNG đặt ở câu cuối. "
         "KHÔNG viết lại câu, không giải thích.\n"
-        "Ví dụ dòng trả về: 3|bí ẩn nghỉ|chiếc ghe ma\n\nCÂU:\n" + numbered)
+        "Ví dụ dòng trả về: 3|bí ẩn nghỉ|chiếc ghe ma   hoặc   5|hào hứng|30%\n\nCÂU:\n" + numbered)
 
 
 def _parse_tag_field(field):
@@ -821,10 +823,14 @@ def _annotate_one(chunk, target, call, ctx=""):
 
 
 _GENRE_KW = {             # du phong khi khong co AI: doan the loai theo tu khoa
-    "quang_cao": r"giảm giá|ưu đãi|mua ngay|khuyến mãi|đặt hàng|freeship|chỉ còn|sale|inbox|hotline",
+    "quang_cao": r"giảm giá|ưu đãi|mua ngay|khuyến mãi|đặt hàng|freeship|chỉ còn|sale|inbox|hotline"
+                 r"|order (now|today)|buy now|shop now|discount|% off|limited (time|offer)|free shipping"
+                 r"|official website|early bird|gift set|upgrade your|get yours",
     "tin_tuc": r"theo (thông tin|báo cáo)|cho biết|ghi nhận|bộ trưởng|chính phủ|tỉnh|thống kê",
-    "kinh_di": r"ma |bóng tối|rợn|kinh hoàng|tiếng động lạ|nửa đêm|biến mất|xác ",
-    "review": r"đánh giá|trải nghiệm|ưu điểm|nhược điểm|so sánh|giá bán|thiết kế|pin |màn hình",
+    "kinh_di": r"ma |bóng tối|rợn|kinh hoàng|tiếng động lạ|nửa đêm|biến mất|xác "
+               r"|haunted|ghost|midnight|creepy|whisper(ed)? my name|vanished|blood",
+    "review": r"đánh giá|trải nghiệm|ưu điểm|nhược điểm|so sánh|giá bán|thiết kế|pin |màn hình"
+              r"|pros and cons|downside|verdict|worth it|compared to|battery life|in my testing",
     "tam_su": r"mình đã từng|tâm sự|cảm thấy|cô đơn|thương|nhớ|chia sẻ với các bạn",
     "ke_chuyen": r"ngày xửa|ngày ấy|một hôm|câu chuyện|kể rằng|năm ấy|chàng|nàng",
 }
@@ -843,7 +849,7 @@ def detect_genre_kw(text):
 def _macro_analyze(text, call):
     """BUOC 1 (doc toan bai): the loai video + tong giong chu dao. Loi -> (None, '')."""
     import json as _json
-    keys = ", ".join("%s (%s)" % (k, v["label"]) for k, v in GENRES.items())
+    keys = "; ".join("%s = %s" % (k, GENRE_ARC[k][0]) for k in GENRES)
     head = text[:3000]
     prompt = ("Đọc kịch bản lồng tiếng dưới đây và xác định:\n"
               "1) the_loai: CHỈ MỘT trong các mã: %s\n"
@@ -859,16 +865,24 @@ def _macro_analyze(text, call):
     except Exception:
         return None, ""
     g = str(d.get("the_loai") or "").strip().lower()
-    return (g if g in GENRES else None), str(d.get("tong") or "").strip()[:200]
+    g = g if g in GENRES else None
+    # AI nho hay nham quang cao <-> review: co keu goi mua / giam gia ro rang -> quang cao
+    if g in (None, "review") and detect_genre_kw(text) == "quang_cao":
+        g = "quang_cao"
+    return g, str(d.get("tong") or "").strip()[:200]
 
 
 def _genre_ctx(genre, tone):
     if not genre:
         return ""
     g = GENRES[genre]
-    return ("BỐI CẢNH TOÀN BÀI: thể loại %s — %s.%s Gắn thẻ đúng tinh thần thể loại này, "
-            "giữ mạch cảm xúc liền giữa các đoạn." % (
-                g["label"], g["goi_y"], (" Tông chủ đạo: %s." % tone) if tone else ""))
+    ex = GENRE_EXAMPLE.get(genre)
+    return ("BỐI CẢNH TOÀN BÀI: thể loại %s — %s.%s\nMẠCH CẢM XÚC NÊN THEO: %s.\n"
+            "Gắn thẻ đúng tinh thần thể loại, giữ mạch cảm xúc liền giữa các đoạn.%s" % (
+                g["label"], g["goi_y"], (" Tông chủ đạo: %s." % tone) if tone else "",
+                GENRE_ARC.get(genre, ("", ""))[1],
+                ("\nVÍ DỤ GẮN ĐÚNG (chỉ để học cách gắn, KHÔNG gắn cho các câu ví dụ này):\n"
+                 "CÂU:\n%s\nTRẢ VỀ:\n%s" % ex) if ex else ""))
 
 
 def _report_note(rep):
@@ -978,7 +992,8 @@ def _auto_annotate(text, target, progress, rep):
         out.append(got)
         if progress:
             progress(ci + 1, len(chunks))
-    return "\n\n".join(out).strip(), _report_note(rep)
+    res = re.sub(r"\s*\[(nghỉ|nghỉ dài)\]\s*$", "", "\n\n".join(out).strip())   # [nghi] cuoi bai: vo ich
+    return res, _report_note(rep)
 
 
 
@@ -1109,6 +1124,65 @@ GENRES = {
 }
 
 
+# MACH CAM XUC tung the loai (AI bien kich bam theo) + DINH NGHIA (de doan dung the loai)
+GENRE_ARC = {
+    "quang_cao": ("ban/gioi thieu san pham de khach MUA: co keu goi mua, gia, giam gia, dat hang",
+                  "câu mở gây tò mò [ngạc nhiên] hoặc [hào hứng] -> giới thiệu sản phẩm [tự tin] -> "
+                  "tính năng, con số [tự tin] -> lợi ích, cảm giác khi dùng [vui] -> nỗi lo của khách "
+                  "[nghiêm túc] -> câu chốt kêu gọi mua [hào hứng]"),
+    "ke_chuyen": ("ke 1 cau chuyen co nhan vat, dien bien",
+                  "mở chuyện [kể chuyện] -> diễn biến [hồi hộp] hoặc [bí ẩn] -> cao trào [kịch tính] -> "
+                  "cảm xúc nhân vật ([vui] [buồn] [sợ hãi] [giận dữ]) -> kết [trầm ngâm] hoặc [dịu dàng]"),
+    "tin_tuc": ("dua tin, binh luan su kien, so lieu",
+                "[nghiêm túc] chủ đạo; tin vui [vui] nhẹ; tin buồn [buồn]; chuyển tin [nghỉ]"),
+    "tam_su": ("tam su, podcast, chia se cam xuc ca nhan",
+               "[dịu dàng] mở đầu -> chia sẻ [trầm ngâm] -> kỷ niệm buồn [buồn] hoặc [nghẹn ngào] -> "
+               "hy vọng [nhẹ nhõm] hoặc [vui]"),
+    "review": ("DANH GIA san pham khach quan: uu diem + nhuoc diem, KHONG keu goi mua",
+               "giới thiệu [tự tin] -> điểm khen [ngạc nhiên] hoặc [vui] -> nhược điểm [nghiêm túc] -> "
+               "kết luận [tự tin]"),
+    "kinh_di": ("chuyen ma, bi an, rung ron",
+                "[bí ẩn] mở đầu -> chi tiết rợn [thì thầm] -> căng thẳng [hồi hộp] -> cao trào [sợ hãi] "
+                "hoặc [kịch tính] -> [nghỉ dài] trước khi tiết lộ"),
+}
+
+
+# DO CAM XUC (nguoi dung chon): k = he so gian bieu cam quanh muc trung tinh.
+# Chatterbox: exaggeration = 0.5 + (ex - 0.5) * k; toc do / am luong / ngat nghi cung gian theo k.
+# Doc qua manh de doc sai chu -> buoc TU KIEM TRA tu doc lai cau sai.
+INTENSITY = {"nhe": ("Nhẹ", 0.7), "vua": ("Vừa", 1.0), "manh": ("Mạnh", 1.35), "rat_manh": ("Rất mạnh", 1.7)}
+
+
+def intensity_list():
+    return [{"id": k, "label": v[0]} for k, v in INTENSITY.items()]
+
+
+# VI DU MAU da gan dung cho tung the loai (model nho hoc theo vi du tot hon hoc theo luat).
+# Dang: (cac cau danh so, cac dong tra ve so|the|tu nhan)
+GENRE_EXAMPLE = {
+    "quang_cao": ("1|Tired of coffee that goes cold in ten minutes?\n2|Meet ThermoMax.\n"
+                  "3|It keeps your drink hot for 24 hours.\n4|No more wasted mornings.\n"
+                  "5|Order today and get 20% off!",
+                  "1|ngạc nhiên nghỉ|\n2|tự tin|ThermoMax\n3|vui|24 hours\n4|nghiêm túc|\n"
+                  "5|hào hứng|20% off"),
+    "ke_chuyen": ("1|Ngày ấy, làng tôi nằm sát bìa rừng.\n2|Một đêm, tiếng chó sủa vang khắp xóm.\n"
+                  "3|Tôi hé cửa nhìn ra.\n4|Có ai đó đang đứng ngay dưới gốc đa.",
+                  "1|kể chuyện|\n2|hồi hộp|\n3|thì thầm nghỉ|\n4|kịch tính|ngay dưới gốc đa"),
+    "tin_tuc": ("1|Sáng nay, giá xăng giảm 500 đồng mỗi lít.\n2|Đây là lần giảm thứ ba trong tháng.\n"
+                "3|Tuy nhiên, giá điện dự kiến sẽ tăng.",
+                "1|nghiêm túc|500 đồng\n2|vui|lần giảm thứ ba\n3|nghiêm túc nghỉ|"),
+    "tam_su": ("1|Có những ngày mình thấy thật mệt.\n2|Mình nhớ mẹ nhiều lắm.\n"
+               "3|Nhưng rồi mình hiểu, ai cũng có lúc như vậy.\n4|Và ngày mai sẽ ổn thôi.",
+               "1|dịu dàng|\n2|nghẹn ngào|nhớ mẹ\n3|trầm ngâm nghỉ|\n4|nhẹ nhõm|ổn thôi"),
+    "review": ("1|I've used this phone for two weeks.\n2|The camera is honestly stunning.\n"
+               "3|Battery life, though, is disappointing.\n4|Overall, it's worth the price.",
+               "1|tự tin|\n2|ngạc nhiên|stunning\n3|nghiêm túc|disappointing\n4|tự tin|worth the price"),
+    "kinh_di": ("1|The house had been empty for ten years.\n2|But that night, the lights came on.\n"
+                "3|Someone whispered my name.\n4|I turned around.",
+                "1|bí ẩn|\n2|hồi hộp|lights came on\n3|thì thầm nghỉ|\n4|sợ hãi nghỉ dài|"),
+}
+
+
 def genre_list():
     return [{"id": k, "label": v["label"]} for k, v in GENRES.items()]
 
@@ -1181,6 +1255,12 @@ def _ordinal(n):
 _NUM = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 
 
+_LETTER_EN = {"B": "Bee", "C": "See", "D": "Dee", "E": "Ee", "F": "Eff", "G": "Gee", "H": "Aitch",
+              "J": "Jay", "K": "Kay", "L": "Ell", "M": "Em", "N": "En", "O": "Oh", "P": "Pee", "Q": "Cue",
+              "R": "Ar", "S": "Ess", "T": "Tee", "U": "You", "V": "Vee", "W": "Double you", "X": "Ex",
+              "Y": "Why", "Z": "Zee"}
+
+
 def normalize_numbers_en(text):
     """So/tien/% -> chu cho giong clone tieng Anh (F5 doc chu so hay nuot/sai)."""
     t = text or ""
@@ -1198,6 +1278,17 @@ def normalize_numbers_en(text):
     t = re.sub(r"\s*−\s*(?=\$?\d)", " minus ", t)          # dau tru that (U+2212)
     t = re.sub(r"(?<=\d)\s*\+\s*(?=\$?\d)", " plus ", t)
     t = re.sub(r"(?<=\d)\s*=\s*(?=\$?\d)", " equals ", t)
+    # nhiet do: Chatterbox/F5 doc "65°C" thanh tieng la ("mực") -> chu
+    t = re.sub(r"(\d)\s*°\s*C\b", r"\1 degrees Celsius", t)
+    t = re.sub(r"(\d)\s*°\s*F\b", r"\1 degrees Fahrenheit", t)
+    t = re.sub(r"(\d)\s*°", r"\1 degrees", t)
+    # (ngoac ngan) va gach dai giua cau -> cho ngat tu nhien, khong doc dinh lien
+    t = re.sub(r"\s*\(([^()\n]{1,60})\)", r", \1,", t)
+    t = re.sub(r"\s*[—–]\s*", ", ", t)
+    t = re.sub(r",\s*([,.;:!?])", r"\1", t)
+    # chu cai DUNG RIENG sau ten rieng ("Zenith C", "Plan B") -> doc ten chu, khong nuot/doc lech
+    t = re.sub(r"\b([A-Z][a-z]{1,20}) ([B-HJ-Z])\b(?![.'\-]\w)",
+               lambda m: m.group(1) + " " + _LETTER_EN.get(m.group(2), m.group(2)), t)
     if not re.search(r"\d", t):
         return t
     # day so liet ke "300, 220, 150, 100" -> ngat bang dau cham: dau phay qua ngan,
@@ -1712,10 +1803,49 @@ def _voice_max_chars(name, english=True):
     return cap
 
 
-def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None):
+VERIFY_LAST = {}          # ket qua tu kiem tra lan doc gan nhat (de bao cao / test)
+
+
+def _words_cmp(t, english):
+    t = (normalize_numbers_en(t) if english else normalize_numbers_vi(t)).lower()
+    return re.findall(r"[\w']+", t.replace("-", " "))
+
+
+def _verify_clips(texts, clips, english, model_name=None):
+    """Whisper nghe lai tung doan -> ti le khop chu (0..1). Loi nghe -> None (coi nhu dat)."""
+    import difflib
+    import tempfile as _tf
+    from . import clone, engine
+    m_name = model_name or str(clone._cfg("CLONE_VERIFY_MODEL", "small"))
+    try:
+        model = engine.get_model(m_name)
+    except Exception:
+        return [None] * len(texts)
+    out = []
+    with _tf.TemporaryDirectory(prefix="verify_") as td:
+        for i, (t, wav) in enumerate(zip(texts, clips)):
+            if not wav:
+                out.append(0.0)
+                continue
+            f = Path(td) / ("%d.wav" % i)
+            f.write_bytes(wav)
+            try:
+                heard = (engine.transcribe(model, f, language="en" if english else "vi")
+                         .get("text") or "")
+            except Exception:
+                out.append(None)
+                continue
+            a, b = _words_cmp(t, english), _words_cmp(heard, english)
+            out.append(difflib.SequenceMatcher(None, a, b).ratio() if a else None)
+    return out
+
+
+def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensity=None):
     """Doc bang giong NHAN BAN co bieu cam. voice = 'c:<ten>'. Tra ve (wav, mime, ext).
-    genre: the loai video (GENRES) -> tong nen, toc do, ngat nghi rieng."""
+    genre: the loai video (GENRES) -> tong nen, toc do, ngat nghi rieng.
+    intensity: do cam xuc (INTENSITY: nhe / vua / manh / rat_manh)."""
     gp = GENRES.get(genre or "") or {}
+    k_emo = INTENSITY.get(intensity or "vua", INTENSITY["vua"])[1]
     from . import clone
     name = voice.split(":", 1)[1] if voice.startswith("c:") else voice
     english = not clone._is_vietnamese(strip_tags(text))
@@ -1724,8 +1854,9 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None):
     else:
         text = normalize_numbers_vi(text)
     use_cbx = english and clone.engine_for(True) == "chatterbox"
-    # Chatterbox doc lien mach doan dai tot hon F5 -> doan ~300 ky tu (2-3 cau)
-    segs = clone_segments(text, 300 if use_cbx else _voice_max_chars(name, english=english))
+    # Chatterbox: doan ~200 ky tu (1-2 cau) — doan dai hon de doc lech / nuot cum tu
+    segs = clone_segments(text, int(clone._cfg("CBX_MAX_CHARS", 200)) if use_cbx
+                          else _voice_max_chars(name, english=english))
     try:
         have_styles = clone.available_styles(name)
     except Exception:
@@ -1752,9 +1883,10 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None):
         mr = float(s.get("mrate") or 0)               # [cham]/[nhanh]: nguoi dung chu dong
         # Voi tieng Viet, giu toc do gan nhip mau that (tranh ep nhanh lam mat nhan nha cau tu)
         if not english:
-            er = max(-5.0, min(1.5, (float(s.get("rate") or 0) - mr) * 0.18))
+            er = max(-5.0 * k_emo, min(1.5 * k_emo, (float(s.get("rate") or 0) - mr) * 0.18 * k_emo))
         else:
-            er = max(-5.0 if natural else -8.0, min(3.0, (float(s.get("rate") or 0) - mr) * 0.3))
+            er = max((-5.0 if natural else -8.0) * k_emo,
+                     min(3.0 * k_emo, (float(s.get("rate") or 0) - mr) * 0.3 * k_emo))
         sp = 1.0 + (er + mr) / 100.0
         if s.get("emph_phrases"):
             sp *= 0.97                                # chua nhip de model nhan ro cum *tu nhan*
@@ -1776,11 +1908,37 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None):
     if use_cbx:
         pr = [_cbx_params(_emo_name(segs[k])) for k, _t, _s in items]
         ex_add = float(gp.get("ex") or 0.0)
-        exs = [round(max(0.25, min(1.0, p[0] + ex_add)), 3) for p in pr]
-        cfgs = [p[1] for p in pr]
-    clips = clone.synth_cues_clone([t for _k, t, _s in items], name, rate=base_rate,
-                                   progress=progress, speeds=[sp for _k, _t, sp in items],
-                                   styles=styles, exaggerations=exs, cfgs=cfgs)
+        exs = [round(max(0.25, min(1.0 + 0.3 * (k_emo > 1), 0.5 + (p[0] + ex_add - 0.5) * k_emo)), 3)
+               for p in pr]
+        # bieu cam manh -> Chatterbox noi nhanh/gat hon -> ha nhe cfg de giu nhip
+        cfgs = [round(max(0.2, p[1] - 0.05 * max(0.0, k_emo - 1.0) / 0.35), 3) for p in pr]
+    texts = [t for _k, t, _s in items]
+    speeds = [sp for _k, _t, sp in items]
+
+    def run(idx, prog=None):
+        pick = lambda L: [L[i] for i in idx] if L else None
+        return clone.synth_cues_clone(pick(texts), name, rate=base_rate, progress=prog,
+                                      speeds=pick(speeds), styles=pick(styles),
+                                      exaggerations=pick(exs), cfgs=pick(cfgs))
+    clips = run(list(range(len(items))), progress)
+    # TU KIEM TRA: Whisper nghe lai tung doan; doan doc lech (nuot / doc sai chu) -> doc lai,
+    # giu ban khop chu nhat. Tat: CLONE_VERIFY = False.
+    if clone._cfg("CLONE_VERIFY", True):
+        floor = float(clone._cfg("CLONE_VERIFY_MIN", 0.85))
+        score = _verify_clips(texts, clips, english)
+        for _round in range(int(clone._cfg("CLONE_VERIFY_RETRY", 2))):
+            bad = [i for i, sc in enumerate(score) if sc is not None and sc < floor]
+            if not bad:
+                break
+            try:
+                again = run(bad)
+            except Exception:
+                break
+            new_sc = _verify_clips([texts[i] for i in bad], again, english)
+            for i, wav, sc in zip(bad, again, new_sc):
+                if wav and (sc is None or sc > score[i]):
+                    clips[i], score[i] = wav, sc
+        VERIFY_LAST.update(n=len(score), low=[round(x, 2) for x in score if x is not None and x < floor])
     by_seg = {}
     for (k, t, _sp), wav in zip(items, clips):
         s = segs[k]
@@ -1791,7 +1949,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None):
         if _STYLE_OF.get(emo) in have_styles:
             gain = _GAIN_SPECIAL.get(emo, 0.0)     # da doc bang mau cam xuc that -> khong chinh to/nho them
         else:
-            gain = _GAIN_SPECIAL.get(emo, max(_GAIN_CAP[0], min(_GAIN_CAP[1], gain)))
+            gain = _GAIN_SPECIAL.get(emo, max(_GAIN_CAP[0] * k_emo, min(_GAIN_CAP[1] * k_emo, gain)))
         gain += float(s.get("gain") or 0)
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
         by_seg[k] = (_fx_clip(wav, semi, gain, extra), t)
@@ -1808,7 +1966,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None):
         out.append(wav)
         nxt = segs[k + 1] if k + 1 < len(segs) else None
         if nxt is not None and "pause" not in nxt:   # khoang nghi tu nhien giua cau
-            gap = (_gap_after(t, english=english) * _SLOW_GAP.get(_emo_name(s), 1.0)
+            gap = (_gap_after(t, english=english) * (_SLOW_GAP.get(_emo_name(s), 1.0) ** k_emo)
                    * float(gp.get("gap") or 1.0))
             out.append(_silence(gap))
     from .tts import _concat_clips

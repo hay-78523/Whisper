@@ -469,7 +469,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/genres":
             if self._require():
                 from ..core import expressive
-                self._send(200, {"genres": expressive.genre_list()})
+                self._send(200, {"genres": expressive.genre_list(),
+                                 "intensities": expressive.intensity_list()})
         elif route == "/api/clone_profile_info":
             s = self._require()
             if s:
@@ -913,8 +914,13 @@ class Handler(BaseHTTPRequestHandler):
         if genre and genre not in expressive.GENRES:
             raise ValueError("Thể loại video không hợp lệ.")
 
+        intensity = (payload.get("intensity") or "").strip() or None
+        if intensity and intensity not in expressive.INTENSITY:
+            raise ValueError("Độ cảm xúc không hợp lệ.")
+
         owner = (s or {}).get("user") or "admin"
-        job = jobs.start_text_dub(text, voice, rate, target, owner=owner, genre=genre)
+        job = jobs.start_text_dub(text, voice, rate, target, owner=owner, genre=genre,
+                                  intensity=intensity)
         sys.stderr.write("[web] job %s (%s): text_dub %d ky tu, dich=%s, giong %s\n"
                          % (job["id"], owner, len(text), target or "khong", voice))
         self._send(200, {"job": job["id"]})

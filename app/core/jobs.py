@@ -12,6 +12,7 @@ import threading
 import time
 from pathlib import Path
 
+from .. import config
 from ..config import JOB_KEEP
 from . import clone, engine, translate, tts, video
 
@@ -361,7 +362,7 @@ class JobManager(object):
         threading.Thread(target=work, daemon=True).start()
         return job
 
-    def start_text_dub(self, text, voice, rate, target, owner=None, genre=None):
+    def start_text_dub(self, text, voice, rate, target, owner=None, genre=None, intensity=None):
         """Dich van ban (neu co target) roi doc thanh audio — khong can file media.
 
         Van ban co THE BIEU CAM ([vui], *nhan*, [nghi]...) + giong edge
@@ -420,7 +421,7 @@ class JobManager(object):
                         elif v.startswith("c:") and not target:
                             # giong clone: giu the -> co bieu cam that
                             data, mime, _ = tts.synth(part_text, v, rate, progress=part_progress,
-                                                      genre=genre)
+                                                      genre=genre, intensity=intensity)
                         else:
                             current = expressive.strip_tags(part_text)
                             if target:
@@ -463,7 +464,21 @@ class JobManager(object):
                     self._finish(job)
                     return
                 keep_tags = voice.startswith("c:") and not target
-                current = text if keep_tags else expressive.strip_tags(text)
+                auto_note, script = None, text
+                if (keep_tags and not expressive.has_markup(text)
+                        and getattr(config, "AUTO_EMOTION", True)):
+                    # kich ban KHONG co the nao -> AI bien kich tu gan cam xuc truoc khi doc
+                    # (khong thi ca bai doc giong [binh thuong], nghe deu deu)
+                    self._set_phase(job, "annotate")
+                    rep = {}
+                    try:
+                        script, auto_note = expressive.auto_annotate(
+                            text, progress=lambda d, t: job.update(done=d, total=t),
+                            report=rep, genre=genre)
+                        job["auto_script"], job["auto_genre"] = script, rep.get("genre")
+                    except Exception as e:
+                        auto_note = "Không tự gắn được cảm xúc: %s" % e
+                current = script if keep_tags else expressive.strip_tags(text)
                 if target:
                     self._set_phase(job, "translate")
                     current = translate.translate_text(
@@ -479,10 +494,13 @@ class JobManager(object):
                     data, mime, _ = tts.synth(
                         current, voice, rate,
                         progress=lambda d, t: job.update(done=d, total=t),
-                        genre=genre if keep_tags else None)
+                        genre=(genre or job.get("auto_genre")) if keep_tags else None,
+                        intensity=intensity if keep_tags else None)
                 job.update(audio=data, mime=mime)
                 job["result"] = {"translated": job.get("translated"),
-                                 "mime": mime, "chars": len(current)}
+                                 "mime": mime, "chars": len(current),
+                                 "auto_script": job.get("auto_script"),
+                                 "auto_genre": job.get("auto_genre"), "auto_note": auto_note}
                 self._finish(job)
             except Exception as e:
                 self._finish(job, "Loi doc van ban: %s (dich/giong online can mang)" % e)

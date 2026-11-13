@@ -519,7 +519,7 @@ def synth_cues_multi(texts, voices, rate="+0%", progress=None):
 
 
 def synth(text, voice=DEFAULT_VOICE, rate="+0%", out_path=None, progress=None, log=None,
-          genre=None):
+          genre=None, intensity=None):
     """Sinh audio tu text. Tra ve (bytes|None neu ghi file, mime, ext)."""
     text = (text or "").strip()
     if not text:
@@ -594,7 +594,8 @@ def synth(text, voice=DEFAULT_VOICE, rate="+0%", out_path=None, progress=None, l
     if voice.startswith("c:"):
         # cat theo cau + nghi tu nhien giua cau + hieu ung bieu cam ([vui], *nhan*...)
         from . import expressive
-        data, mime, ext = expressive.synth_clone(text, voice, rate, progress=progress, genre=genre)
+        data, mime, ext = expressive.synth_clone(text, voice, rate, progress=progress, genre=genre,
+                                                 intensity=intensity)
     elif voice.startswith("say:"):
         data, mime, ext = _synth_say(text, voice.split(":", 1)[1]), "audio/mp4", ".m4a"
         if progress:

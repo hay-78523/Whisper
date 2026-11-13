@@ -200,6 +200,9 @@
         <label class="opt" title="Giọng điệu theo thể loại video: tông nền, tốc độ, ngắt nghỉ">Thể loại
           <select id="t_genre"><option value="">Tự động (AI nhận diện)</option></select>
         </label>
+        <label class="opt" title="Mạnh / Rất mạnh: cảm xúc rõ hơn; câu nào đọc sai chữ tool tự đọc lại">Độ cảm xúc
+          <select id="t_intensity"></select>
+        </label>
         <label class="opt">Tốc độ
           <select id="t_rate">
             <option value="-20%">chậm</option>
@@ -1141,6 +1144,11 @@
     (d.genres || []).forEach(function (g) {
       var o = document.createElement('option'); o.value = g.id; o.textContent = g.label; gsel.appendChild(o);
     });
+    var isel = document.getElementById('t_intensity');
+    (d.intensities || []).forEach(function (g) {
+      var o = document.createElement('option'); o.value = g.id; o.textContent = g.label; isel.appendChild(o);
+    });
+    isel.value = 'vua';
   }).catch(function () {});
 
   document.getElementById('ai_annotate').addEventListener('click', function () {
@@ -1209,7 +1217,8 @@
         text: ttext.value, target: target,
         voice: document.getElementById('t_voice').value,
         rate: document.getElementById('t_rate').value,
-        genre: document.getElementById('t_genre').value
+        genre: document.getElementById('t_genre').value,
+        intensity: document.getElementById('t_intensity').value
       })
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
@@ -1223,6 +1232,17 @@
           tgo.disabled = false;
           if (err) { st.innerHTML = err.message; return; }
           st.style.display = 'none';
+          var rs = j.result || {};
+          if (rs.auto_script) {            // AI tu gan cam xuc -> dua len o soan thao de xem / sua
+            ttext.value = rs.auto_script;
+            var gsel = document.getElementById('t_genre');
+            if (rs.auto_genre && gsel && !gsel.value) gsel.value = rs.auto_genre;
+            st.style.display = 'block';
+            st.innerHTML = '<div style="color:var(--muted)">AI đã tự gắn cảm xúc' +
+              (rs.auto_genre ? ' (thể loại: ' + esc((gsel.querySelector('option[value="' + rs.auto_genre + '"]') || {}).textContent || rs.auto_genre) + ')' : '') +
+              ' — kịch bản có thẻ đã hiện trong ô soạn thảo, sửa rồi bấm tạo lại nếu muốn.' +
+              (rs.auto_note ? '<br>⚠️ ' + esc(rs.auto_note) : '') + '</div>';
+          }
           var trans = (j.result && j.result.translated) || '';
           document.getElementById('t_transwrap').style.display = trans ? 'flex' : 'none';
           document.getElementById('t_trans').textContent = trans;
