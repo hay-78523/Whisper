@@ -935,9 +935,27 @@ def auto_annotate(text, target=None, progress=None, report=None, genre=None):
                      "Gửi file data/logs/ai_bien_kich.log cho kỹ thuật nếu lặp lại.")
 
 
+def _strip_emotion_tags(text):
+    """Bo the CAM XUC cu ([vui], [nghi], *nhan*) de AI gan lai theo the loai moi;
+    GIU the phan vai [giong:...] va giu nguyen xuong dong / doan."""
+    keep = []
+
+    def hold(m):
+        keep.append(m.group(0))
+        return "\x00%d\x00" % (len(keep) - 1)
+    t = _VOICE_TAG_RE.sub(hold, text or "")
+    t = re.sub(r"\*([^*\n]{1,80})\*", r"\1", t)
+    t = re.sub(r"\[[^\[\]\n]{1,25}\]", " ", t)
+    t = re.sub(r"\x00(\d+)\x00", lambda m: keep[int(m.group(1))], t)
+    t = re.sub(r"[ \t]{2,}", " ", t)
+    return "\n".join(ln.strip() for ln in t.split("\n")).strip()
+
+
 def _auto_annotate(text, target, progress, rep):
     import time as _t
     from . import translate
+    if has_markup(text):                 # bam AI lan nua / doi the loai -> gan lai tu dau, khong chong the
+        text = _strip_emotion_tags(text)
     chunks = _split_paras(text, limit=4000)
     rep["total"] = len(chunks)
     if progress:

@@ -101,8 +101,14 @@
         <!-- Render from JS -->
       </div>
 
+      <div class="btnrow" style="margin:0 0 6px; align-items:center">
+        <label class="opt" style="margin:0" title="Mục đích của giọng đọc: quyết định tốc độ, ngắt nghỉ, cao độ, độ to và cách AI gắn cảm xúc">Mục đích / thể loại
+          <select id="t_genre"><option value="">Tự động (AI nhận diện)</option></select>
+        </label>
+        <button class="btn" id="ai_annotate" title="AI gắn cảm xúc từng câu theo đúng thể loại đã chọn (bấm lại = gắn lại từ đầu)">✨ AI gắn cảm xúc</button>
+        <span id="genre_hint" class="muted" style="font-size:12px; display:none"></span>
+      </div>
       <div class="btnrow" style="margin:0 0 10px">
-        <button class="btn" id="ai_annotate" title="Tự động phân tích ngữ cảnh và gắn thẻ biểu cảm cho kịch bản">Tự động gắn thẻ</button>
         <button class="btn tagbtn" data-ins="*|*" title="Nhấn mạnh từ đang bôi đen">＊nhấn＊</button>
         <button class="btn tagbtn" data-ins="[vui] ">[vui]</button>
         <button class="btn tagbtn" data-ins="[hào hứng] ">[hào hứng]</button>
@@ -196,9 +202,6 @@
       <div class="opts">
         <label class="opt" style="display:none">Dịch sang
           <select id="t_target"><option value="">Không dịch — đọc nguyên văn</option></select>
-        </label>
-        <label class="opt" title="Giọng điệu theo thể loại video: tông nền, tốc độ, ngắt nghỉ">Thể loại
-          <select id="t_genre"><option value="">Tự động (AI nhận diện)</option></select>
         </label>
         <label class="opt" title="Mạnh / Rất mạnh: cảm xúc rõ hơn; câu nào đọc sai chữ tool tự đọc lại">Độ cảm xúc
           <select id="t_intensity"></select>
@@ -1151,6 +1154,14 @@
     isel.value = d.default_intensity || 'manh';
   }).catch(function () {});
 
+  var _aiGenre = null;              // the loai luc AI gan the lan gan nhat
+  document.getElementById('t_genre').addEventListener('change', function () {
+    var h = document.getElementById('genre_hint');
+    if (_aiGenre !== null && this.value !== _aiGenre && /\[[^\]]+\]/.test(ttext.value)) {
+      h.style.display = 'inline'; h.textContent = '← đã đổi thể loại: bấm "✨ AI gắn cảm xúc" để gắn lại cho đúng';
+    } else { h.style.display = 'none'; }
+  });
+
   document.getElementById('ai_annotate').addEventListener('click', function () {
     var btn = this;
     var text = ttext.value.trim();
@@ -1171,6 +1182,7 @@
         if (j.state !== 'done') { st.innerHTML = '❌ ' + (j.error || 'Lỗi không rõ'); return; }
         ttext.value = j.result.text;
         document.getElementById('t_target').value = '';   // ban trong o da la ban cuoi
+        document.getElementById('genre_hint').style.display = 'none';
         // AI doan the loai -> tu chon san (nguoi dung doi lai duoc)
         var rp = j.result.report || {}, gsel = document.getElementById('t_genre');
         var gname = '';
@@ -1179,6 +1191,7 @@
           var go = gsel.querySelector('option[value="' + rp.genre + '"]');
           gname = go ? go.textContent : rp.genre;
         }
+        _aiGenre = gsel ? gsel.value : null;
         // bao loi ro rang: phan nao dung ban nhanh, vi sao, cach khac phuc
         st.innerHTML = j.result.note
           ? '<div style="color:#b45309">⚠️ ' + esc(j.result.note) + '</div>' +
