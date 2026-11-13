@@ -2251,7 +2251,11 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if s.get("emph_phrases"):
             wav = _apply_emph_envelope(wav, t, s.get("emph_phrases"))
         semi, gain = _CLONE_EMO_FX.get(emo, (0, 0))
-        semi += _EMO_PITCH.get(emo, 0.0) * k_emo + float(gp.get("pitch") or 0.0)   # + chat giong the loai
+        # KHONG doi cao do nhan tao theo cam xuc / the loai: ffmpeg doi cao do bang tua nhanh/cham
+        # -> doi luon AM SAC (nghe nhu nguoi khac, do that: cau hao hung con giong 64%). Cao do
+        # cam xuc den tu model + mau cam xuc cua chinh giong do. Bat lai: CLONE_EMO_PITCH = True.
+        if clone._cfg("CLONE_EMO_PITCH", False):
+            semi += _EMO_PITCH.get(emo, 0.0) * k_emo + float(gp.get("pitch") or 0.0)
         # moi doan da chuan hoa cung DO TO GIONG NOI -> tra lai chenh lech to-nho theo cam xuc
         # (vui/hao hung to hon, buon nhe hon, thi tham nhe han); cuoi bai chinh 1 lan cho ca bai.
         hi = float(clone._cfg("CLONE_EMO_GAIN_CAP", 3.5)) * k_emo
