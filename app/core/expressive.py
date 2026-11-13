@@ -1030,6 +1030,14 @@ _CLONE_EMO_FX = {
     # the DOI GIONG (co y bien thanh nhan vat khac): van doi cao do
     "phan dien": (-3.0, 1), "tre con": (4.0, 0), "gia": (-2.0, -1),
 }
+# cao do lech nhe theo cam xuc (cung, nhan theo Do cam xuc) — nguoi vui/hao hung noi cao
+# giong hon, buon/tram thap hon. Nho (<= ~1 cung) de van dung giong nhan vat.
+_EMO_PITCH = {"hao hung": 0.8, "vui": 0.6, "ngac nhien": 1.0, "het": 1.0, "gian du": 0.3,
+              "quang cao": 0.5, "tu tin": 0.3, "kich tinh": 0.3, "tinh nghich": 0.6, "tu hao": 0.4,
+              "gap gap": 0.4, "so hai": 0.5, "lo lang": 0.3,
+              "buon": -0.7, "met moi": -0.8, "thi tham": -0.3, "diu dang": -0.4, "tram ngam": -0.6,
+              "bi an": -0.5, "nghen ngao": -0.5, "buon ngu": -0.8, "that vong": -0.6, "lanh lung": -0.4,
+              "binh tinh": -0.3, "lang man": -0.3, "hoi hop": -0.2}
 # loc am thanh rieng cho mot so tong giong (run giong, run run...)
 _CLONE_EMO_FILTER = {
     "lo lang": "tremolo=f=7:d=0.15",
@@ -1739,6 +1747,20 @@ def _natural_gap(gap_ms, text, nxt_text, seed):
     return g
 
 
+def _master(wav, peak_db=-1.5):
+    """Chinh do to CA BAI bang 1 he so (dinh -1.5 dBFS) -> giu nguyen chenh lech to/nho giua cac cau."""
+    import numpy as np
+    from array import array
+    from . import clone
+    sr, _c, smp = clone._wav_read(wav)
+    x = np.frombuffer(smp, dtype=np.int16).astype(np.float32)
+    peak = float(np.abs(x).max())
+    if peak < 1:
+        return wav
+    g = (32767.0 * 10 ** (peak_db / 20.0)) / peak
+    return clone._wav_write(sr, array("h", np.clip(x * g, -32768, 32767).astype(np.int16).tobytes()))
+
+
 def _silence(ms, sr=24000):
     from array import array
     from . import clone
@@ -2210,14 +2232,19 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if s.get("emph_phrases"):
             wav = _apply_emph_envelope(wav, t, s.get("emph_phrases"))
         semi, gain = _CLONE_EMO_FX.get(emo, (0, 0))
-        # moi doan da bi chuan hoa cung 1 do to -> cau vui / buon to nhu nhau (phang). Tra lai
-        # chenh lech to-nho theo cam xuc: vui/hao hung to hon, buon/thi tham nhe hon.
-        cap = float(clone._cfg("CLONE_EMO_GAIN_CAP", 1.5)) * k_emo
-        if _STYLE_OF.get(emo) in have_styles:
-            gain *= 0.6                          # mau cam xuc that da co san phan to/nho
-        gain = _GAIN_SPECIAL.get(emo, max(-cap, min(cap, gain)))
+        semi += _EMO_PITCH.get(emo, 0.0) * k_emo
+        # moi doan da chuan hoa cung DO TO GIONG NOI -> tra lai chenh lech to-nho theo cam xuc
+        # (vui/hao hung to hon, buon nhe hon, thi tham nhe han); cuoi bai chinh 1 lan cho ca bai.
+        hi = float(clone._cfg("CLONE_EMO_GAIN_CAP", 3.5)) * k_emo
+        gain = max(-8.0, min(hi, gain * 0.8 * k_emo))
         gain += float(s.get("gain") or 0)
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
+        if use_cbx:
+            # Chatterbox KHONG nhan toc do -> co gian tung cau (giu cao do): cau buon cham,
+            # cau hao hung nhanh, va o "Toc do" cham/nhanh cung co tac dung
+            tempo = clone._rate_to_speed(base_rate) * (1.0 + (_sp - 1.0) * 1.5)
+            if abs(tempo - 1.0) > 0.015:
+                extra.append("atempo=%.4f" % max(0.6, min(1.5, tempo)))
         by_seg[k] = (_fx_clip(wav, semi, gain, extra), t)
 
     out = []
@@ -2241,6 +2268,11 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     if clone._cfg("ROOM_TONE", True) and data[:4] == b"RIFF":
         try:
             data = _add_room_tone(data, _room_tone(name))
+        except Exception:
+            pass
+    if data[:4] == b"RIFF":
+        try:
+            data = _master(data)
         except Exception:
             pass
     return data, mime, ext

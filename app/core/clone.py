@@ -1568,13 +1568,26 @@ def _post_process(wav_bytes):
         a = out
 
     if _opt("normalize", "CLONE_POST_NORMALIZE", True):
-        peak = max(max(a), -min(a)) or 1
-        target = 32768.0 * (10 ** (float(_cfg("CLONE_POST_PEAK_DBFS", -1.5)) / 20.0))
-        gain = target / peak
-        max_gain = 10 ** (float(_cfg("CLONE_POST_MAX_GAIN_DB", 12.0)) / 20.0)
-        gain = min(gain, max_gain)
+        # CHUAN HOA THEO DO TO GIONG NOI (trung binh phan co tieng), KHONG theo dinh, va chua
+        # khoang du -> buoc cam xuc sau do tang/giam to-nho tung cau con tac dung (truoc day
+        # moi cau bi ep cung dinh -1.5 dB, tang to cho cau hao hung bi bo gioi han chan het).
+        import numpy as np
+        x = np.frombuffer(a.tobytes(), dtype=np.int16).astype(np.float32)
+        peak = float(np.abs(x).max()) or 1.0
+        fr = max(1, int(sr * 0.02))
+        nfr = len(x) // fr
+        if nfr:
+            frms = np.sqrt((x[:nfr * fr].reshape(nfr, fr) ** 2).mean(axis=1))
+            voiced = frms[frms > peak * 0.05]
+            rms_v = float(np.sqrt((voiced ** 2).mean())) if len(voiced) else peak / 4
+        else:
+            rms_v = peak / 4
+        target = 32768.0 * (10 ** (float(_cfg("CLONE_POST_RMS_DBFS", -20.0)) / 20.0))
+        ceil = 32768.0 * (10 ** (float(_cfg("CLONE_POST_PEAK_CEIL_DBFS", -4.0)) / 20.0))
+        gain = min(target / max(rms_v, 1.0), ceil / peak,
+                   10 ** (float(_cfg("CLONE_POST_MAX_GAIN_DB", 12.0)) / 20.0))
         if abs(gain - 1.0) > 0.02:
-            a = array("h", (max(-32768, min(32767, int(x * gain))) for x in a))
+            a = array("h", np.clip(x * gain, -32768, 32767).astype(np.int16).tobytes())
 
     fade = int(sr * float(_cfg("CLONE_POST_FADE_MS", 10)) / 1000.0)
     if fade > 1 and len(a) > fade * 2:
