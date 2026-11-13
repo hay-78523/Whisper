@@ -1331,9 +1331,9 @@ def normalize_numbers_en(text):
     t = re.sub(r"\s*\(([^()\n]{1,60})\)", r", \1,", t)
     t = re.sub(r"\s*[—–]\s*", ", ", t)
     t = re.sub(r",\s*([,.;:!?])", r"\1", t)
-    # chu cai DUNG RIENG sau ten rieng ("Zenith C", "Plan B") -> doc ten chu, khong nuot/doc lech
-    t = re.sub(r"\b([A-Z][a-z]{1,20}) ([B-HJ-Z])\b(?![.'\-]\w)",
-               lambda m: m.group(1) + " " + _LETTER_EN.get(m.group(2), m.group(2)), t)
+    # chu cai DUNG RIENG sau ten rieng ("Zenith C", "Plan B") -> viet lien "Zenith-C" de doc nhu
+    # 1 TEN. (Doi thanh "Zenith See" thi model hieu "see" la dong tu: "Zenith. See?")
+    t = re.sub(r"\b([A-Z][a-z]{1,20}) ([B-HJ-Z])\b(?![.'\-]\w)", r"\1-\2", t)
     if not re.search(r"\d", t):
         return t
     # day so liet ke "300, 220, 150, 100" -> ngat bang dau cham: dau phay qua ngan,
@@ -1950,7 +1950,11 @@ MISS_LAST = []            # doan thieu chu then chot / keo dai chu (de test)
 
 def _words_cmp(t, english):
     t = (normalize_numbers_en(t) if english else normalize_numbers_vi(t)).lower()
-    return re.findall(r"[\w']+", t.replace("-", " "))
+    toks = re.findall(r"[\w']+", t.replace("-", " "))
+    if english:                      # chu cai rieng "c" == "see" (Whisper ghi kieu nao cung duoc)
+        toks = [_LETTER_EN.get(x.upper(), x).lower() if len(x) == 1 and x not in ("a", "i") else x
+                for x in toks]
+    return toks
 
 
 def _cut_tail(wav, t_end):
@@ -1985,8 +1989,8 @@ def _key_tokens(text, english):
         lw = w.lower()
         if lw in (_KEY_WORDS_EN if english else _KEY_WORDS_VI):
             keys.append(lw)
-        elif w[:1].isupper() and not first and lw not in ("i", "i'm", "i'll", "i've", "i'd"):
-            keys.append(lw)
+        elif w[:1].isupper() and not first and lw not in ("i", "i'm", "i'll", "i've", "i'd", "a"):
+            keys.append(_LETTER_EN.get(w, w).lower() if len(w) == 1 and english else lw)
         first = False
     sent_starts = {m.group(1).lower() for m in re.finditer(r"(?:^|[.!?]\s+)([\w']+)", text or "")}
     return [k for k in keys if k not in sent_starts or k in _KEY_WORDS_EN or k in _KEY_WORDS_VI]
@@ -2172,6 +2176,10 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     else:
         text = normalize_numbers_vi(text)
     use_cbx = english and clone.engine_for(True) == "chatterbox"
+    if use_cbx:
+        # Chatterbox khong nhan chu that duoc; giu *...* thi cau bi cat giua cum
+        # ("...Auto Brew system | will heat") -> bo dau nhan, chi ngat o dau cau / dau phay
+        text = re.sub(r"\*([^*\n]{1,80})\*", r"\1", text)
     # Chatterbox: doan ~200 ky tu (1-2 cau) — doan dai hon de doc lech / nuot cum tu
     segs = clone_segments(text, int(clone._cfg("CBX_MAX_CHARS", 200)) if use_cbx
                           else _voice_max_chars(name, english=english))
@@ -2284,7 +2292,8 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if use_cbx:
             # Chatterbox KHONG nhan toc do -> co gian tung cau (giu cao do): cau buon cham,
             # cau hao hung nhanh, va o "Toc do" cham/nhanh cung co tac dung
-            tempo = clone._rate_to_speed(base_rate) * _sp
+            # Chatterbox da tu doc nhanh khi hao hung -> chi duoc LAM CHAM (buon / o Toc do cham)
+            tempo = clone._rate_to_speed(base_rate) * min(1.0, _sp)
             if abs(tempo - 1.0) > 0.015:
                 extra.append("atempo=%.4f" % max(0.6, min(1.5, tempo)))
         by_seg[k] = (_fx_clip(wav, semi, gain, extra), t)
