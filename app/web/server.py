@@ -201,8 +201,11 @@ class Handler(BaseHTTPRequestHandler):
         if extra_headers:
             for k, v in extra_headers:
                 self.send_header(k, v)
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass  # trinh duyet huy giua chung (vd bam nghe thu giong khac) — binh thuong
 
     def _redirect(self, location):
         self.send_response(302)
