@@ -669,7 +669,15 @@ STYLE_TEXTS_EN = {
     "calm": "Take a slow, deep breath, and let the quiet settle in. There's no rush tonight. "
             "Everything is going to be okay.",
 }
-STYLE_GEN_PARAMS = {"hype": (0.95, 0.3), "calm": (0.3, 0.5)}     # (exaggeration, cfg)
+STYLE_TEXTS_EN.update({
+    # cau co NOI DUNG dung cam xuc -> Chatterbox doc buon / gian / thi tham THAT (khong chinh am)
+    "sad": "I kept every letter she ever wrote me. Some nights I still read them... and I just miss "
+           "her so much.",
+    "angry": "No! I told you a hundred times, and you still did it anyway! I am done with this!",
+    "soft": "Shh... come closer. Don't make a sound. Someone is standing right outside the door.",
+})
+STYLE_GEN_PARAMS = {"hype": (0.95, 0.3), "calm": (0.3, 0.5),        # (exaggeration, cfg)
+                    "sad": (0.5, 0.5), "angry": (1.1, 0.3), "soft": (0.35, 0.5)}
 
 
 def can_make_styles():
@@ -772,8 +780,11 @@ def needs_styles(name):
     Chatterbox (giong Anh) -> lam lai cho cam xuc that."""
     if not ({"hype", "calm"} <= available_styles(name)):
         return True
-    return bool(profile_lang(name) == "en" and can_make_styles()
-                and (profile_meta(name).get("styles_method") or {}))
+    if profile_lang(name) == "en" and can_make_styles():
+        if set(EMO_STYLES) - available_styles(name):      # thieu mau buon / gian / thi tham
+            return True
+        return bool(profile_meta(name).get("styles_method") or {})
+    return False
 
 
 # ---- cach 2 (MOI MAY, ca tieng Viet): BIEN DOI chinh mau goc thanh ban hao hung / tram.
@@ -1706,7 +1717,8 @@ def _request(port, payload, out_dir, n_expected, progress=None, timeout=7200, st
     return result
 
 
-STYLE_NAMES = ("hype", "calm", "alt1", "alt2", "alt3")
+STYLE_NAMES = ("hype", "calm", "sad", "angry", "soft", "alt1", "alt2", "alt3")
+EMO_STYLES = ("sad", "angry", "soft")      # mau cam xuc THAT them (Chatterbox doc cau dung cam xuc)
 ALT_STYLES = ("alt1", "alt2", "alt3")      # mau phu cung giong, cung nhip -> xoay vong cho doc bot don dieu
 
 
@@ -1745,6 +1757,8 @@ def style_speed(name, style):
     d = profile_dir(safe_name(name))
     # mau BIEN DOI: nhanh/cham la CO Y (mot phan cua cam xuc) -> khong bu lai
     if (profile_meta(safe_name(name)).get("styles_method") or {}).get(style) == "bien_doi":
+        return 1.0
+    if style in EMO_STYLES:          # buon cham / gian nhanh la CAM XUC -> khong bu toc do
         return 1.0
     a = _ref_wpm(d / "ref.wav", d / "ref.txt")
     b = _ref_wpm(d / "styles" / style / "ref.wav", d / "styles" / style / "ref.txt")

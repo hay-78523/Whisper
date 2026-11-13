@@ -1096,6 +1096,25 @@ _STYLE_OF = {e: "hype" for e in ("vui", "hao hung", "ngac nhien", "tu hao", "gap
 _STYLE_OF.update({e: "calm" for e in ("buon", "met moi", "diu dang", "thi tham", "bi an", "nung niu",
                                       "binh tinh", "tram ngam", "nghen ngao", "buon ngu", "that vong",
                                       "lang man", "hoi hop", "ngai ngung", "lo lang", "so hai")})
+# MAU CAM XUC uu tien cho tung the (co mau rieng thi dung, khong co thi lui ve hype/calm):
+# cam xuc THAT den tu mau giong do doc dung cam xuc, khong phai chinh am sau khi doc
+_STYLE_PREF = {}
+for _e in ("buon", "that vong", "nghen ngao", "met moi", "buon ngu", "tram ngam"):
+    _STYLE_PREF[_e] = ("sad", "calm")
+for _e in ("gian du", "kho chiu", "het", "phan dien"):
+    _STYLE_PREF[_e] = ("angry", "hype")
+for _e in ("thi tham", "bi an", "hoi hop", "so hai", "lo lang", "nung niu"):
+    _STYLE_PREF[_e] = ("soft", "calm")
+
+
+def _style_for(emo, have):
+    """Mau cam xuc dung cho the `emo` (theo thu tu uu tien, chi lay mau giong do CO)."""
+    for st in _STYLE_PREF.get(emo, (_STYLE_OF.get(emo, ""),)):
+        if st and st in have:
+            return st
+    return ""
+
+
 # am luong: chi nhich nhe (tranh cam giac "tut/vot tieng" nhu loi), tru thi tham / het
 _GAIN_CAP = (-1.0, 1.0)
 _GAIN_SPECIAL = {"thi tham": -2.5, "het": 2.5}
@@ -2174,7 +2193,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         emo = _emo_name(s)
         if s.get("event"):
             continue
-        natural = _STYLE_OF.get(emo) in have_styles
+        natural = bool(_style_for(emo, have_styles))
         if emo == "het" and t[-1:] in ".,":
             t = t[:-1] + "!"
         elif emo in _HAPPY and t.endswith("."):
@@ -2194,7 +2213,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     if not items:
         raise ValueError("Văn bản không có gì để đọc.")
 
-    styles = [_STYLE_OF.get(_emo_name(segs[k]), "") for k, _t, _s in items]
+    styles = [_style_for(_emo_name(segs[k]), have_styles) for k, _t, _s in items]
     rot = [""] + [a for a in getattr(clone, "ALT_STYLES", ()) if a in have_styles]
     if len(rot) > 1:
         k_rot = 0
@@ -2258,14 +2277,14 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
             semi += _EMO_PITCH.get(emo, 0.0) * k_emo + float(gp.get("pitch") or 0.0)
         # moi doan da chuan hoa cung DO TO GIONG NOI -> tra lai chenh lech to-nho theo cam xuc
         # (vui/hao hung to hon, buon nhe hon, thi tham nhe han); cuoi bai chinh 1 lan cho ca bai.
-        hi = float(clone._cfg("CLONE_EMO_GAIN_CAP", 3.5)) * k_emo
-        gain = max(-8.0, min(hi, gain * 0.8 * k_emo)) + float(gp.get("gain") or 0.0)
+        hi = float(clone._cfg("CLONE_EMO_GAIN_CAP", 1.5)) * k_emo
+        gain = max(-4.0, min(hi, gain * 0.4 * k_emo)) + float(gp.get("gain") or 0.0)
         gain += float(s.get("gain") or 0)
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
         if use_cbx:
             # Chatterbox KHONG nhan toc do -> co gian tung cau (giu cao do): cau buon cham,
             # cau hao hung nhanh, va o "Toc do" cham/nhanh cung co tac dung
-            tempo = clone._rate_to_speed(base_rate) * (1.0 + (_sp - 1.0) * 1.5)
+            tempo = clone._rate_to_speed(base_rate) * _sp
             if abs(tempo - 1.0) > 0.015:
                 extra.append("atempo=%.4f" % max(0.6, min(1.5, tempo)))
         by_seg[k] = (_fx_clip(wav, semi, gain, extra), t)
