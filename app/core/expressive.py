@@ -1658,6 +1658,87 @@ def _apply_emph_envelope(wav, text, emph_phrases, boost_db=1.8):
         return wav
 
 
+def _room_tone(name, sr=24000):
+    """Tieng phong that (nen yen tinh nhat) tu file mau cua chinh giong do -> lot vao khoang lang
+    thay cho im lang tuyet doi (so 0) — tai nguoi nghe 'tat han' la nhan ra may ghep.
+    -> mang float32 ~0.4s, da chinh ve -66..-58 dBFS; mau sach tuyet doi -> nhieu hong nhe."""
+    import numpy as np
+    from . import clone
+    y = None
+    try:
+        r, _c, smp = clone._wav_read((clone.profile_dir(clone.safe_name(name)) / "ref.wav").read_bytes())
+        x = np.frombuffer(smp, dtype=np.int16).astype(np.float32) / 32768.0
+        if r == sr and len(x) > sr:
+            w = int(0.4 * sr)
+            best = None
+            for i in range(0, len(x) - w, w // 4):
+                seg = x[i:i + w]
+                rms = float(np.sqrt((seg ** 2).mean()))
+                # bo doan so 0 tuyet doi va doan co tieng tach/hoi (dinh > 5 lan trung binh):
+                # tieng phong that phai DEU
+                if (rms > 1e-5 and float(np.abs(seg).max()) < 5 * rms
+                        and (best is None or rms < best[0])):
+                    best = (rms, seg.copy())
+            if best:
+                y = best[1]
+    except Exception:
+        y = None
+    if y is None:                                   # mau qua sach -> nhieu hong (giong tieng phong)
+        rng = np.random.default_rng(7)
+        y = np.cumsum(rng.standard_normal(int(0.4 * sr))).astype(np.float32)
+        y -= np.convolve(y, np.ones(200) / 200, mode="same")
+    y = y - float(y.mean())
+    rms = float(np.sqrt((y ** 2).mean())) or 1e-9
+    db = 20 * np.log10(rms)
+    lo, hi = float(clone._cfg("ROOM_TONE_MIN_DB", -66)), float(clone._cfg("ROOM_TONE_MAX_DB", -58))
+    target = min(hi, max(lo, db))
+    return y * (10 ** (target / 20.0) / rms)
+
+
+def _add_room_tone(wav, tone):
+    """Tron tieng phong (lap lai, noi muot) duoi CA bai: cho lang co 'khong khi', cho noi bi lan at."""
+    import numpy as np
+    from array import array
+    from . import clone
+    sr, _c, smp = clone._wav_read(wav)
+    x = np.frombuffer(smp, dtype=np.int16).astype(np.float32) / 32768.0
+    if not len(x) or tone is None or not len(tone):
+        return wav
+    want = float(np.sqrt((tone ** 2).mean()))       # muc tieng phong can giu
+    f = min(len(tone) // 4, int(0.05 * sr))
+    if f > 1:                                       # noi vong muot: fade dau/cuoi moi lan lap
+        ramp = np.linspace(0, 1, f, dtype=np.float32)
+        tone = tone.copy()
+        tone[:f] *= ramp
+        tone[-f:] *= ramp[::-1]
+        step = len(tone) - f
+        bed = np.zeros(len(x) + len(tone), dtype=np.float32)
+        for i in range(0, len(x), step):
+            bed[i:i + len(tone)] += tone
+        bed = bed[:len(x)]
+    else:
+        bed = np.resize(tone, len(x))
+    got = float(np.sqrt((bed ** 2).mean())) or 1e-9
+    bed *= want / got                               # noi vong lam lech muc -> chinh lai
+    y = np.clip(x + bed, -1.0, 1.0)
+    return clone._wav_write(sr, array("h", (y * 32767).astype(np.int16).tobytes()))
+
+
+def _natural_gap(gap_ms, text, nxt_text, seed):
+    """Ngat nghi KHONG deu nhu may: dao dong quanh muc chuan, cau hoi / cam than nghi lau hon,
+    cau sau noi tiep y (and/but/so/va/nhung...) nghi ngan hon."""
+    import random
+    r = random.Random(seed)
+    g = gap_ms * r.uniform(0.82, 1.25)
+    t = (text or "").rstrip()
+    if t.endswith(("?", "!")):
+        g *= 1.15
+    nx = (nxt_text or "").lstrip().lower()
+    if re.match(r"(and|but|so|or|because|then|và|nhưng|nên|rồi|vì|thì)\b", nx):
+        g *= 0.8
+    return g
+
+
 def _silence(ms, sr=24000):
     from array import array
     from . import clone
@@ -1804,6 +1885,7 @@ def _voice_max_chars(name, english=True):
 
 
 VERIFY_LAST = {}          # ket qua tu kiem tra lan doc gan nhat (de bao cao / test)
+TRIM_LAST = []            # moc cat am thua cuoi doan (de test)
 
 
 def _words_cmp(t, english):
@@ -1811,8 +1893,40 @@ def _words_cmp(t, english):
     return re.findall(r"[\w']+", t.replace("-", " "))
 
 
+def _cut_tail(wav, t_end):
+    """Cat wav tai giay t_end (fade 30ms) — bo am thua Chatterbox hay doc them o cuoi doan."""
+    from array import array
+    from . import clone
+    sr, _ch, samples = clone._wav_read(wav)
+    a = array("h", samples)
+    n = min(len(a), max(1, int(t_end * sr)))
+    a = a[:n]
+    f = min(len(a), int(0.03 * sr))
+    for k in range(f):
+        a[len(a) - 1 - k] = int(a[len(a) - 1 - k] * (k / float(f)))
+    return clone._wav_write(sr, a)
+
+
+def _voiced_after(wav, t0):
+    """So giay CO TIENG NOI trong wav tinh tu giay t0 (khung 20ms, nguong 10% dinh)."""
+    from . import clone
+    sr, _ch, samples = clone._wav_read(wav)
+    import numpy as np
+    x = np.frombuffer(samples, dtype=np.int16).astype(np.float32)
+    peak = float(np.abs(x).max()) if len(x) else 0.0
+    seg = x[int(t0 * sr):]
+    if peak <= 0 or len(seg) < sr * 0.02:
+        return 0.0
+    fr = int(sr * 0.02)
+    n = len(seg) // fr
+    rms = np.sqrt((seg[:n * fr].reshape(n, fr) ** 2).mean(axis=1))
+    return float((rms > peak * 0.1).sum()) * 0.02
+
+
 def _verify_clips(texts, clips, english, model_name=None):
-    """Whisper nghe lai tung doan -> ti le khop chu (0..1). Loi nghe -> None (coi nhu dat)."""
+    """Whisper nghe lai tung doan -> ti le khop chu (0..1). Loi nghe -> None (coi nhu dat).
+    Doan co AM THUA sau tu cuoi cua kich ban (vd Chatterbox doc them "Send!") -> CAT bo
+    ngay trong `clips` (sua tai cho) roi cham lai."""
     import difflib
     import tempfile as _tf
     from . import clone, engine
@@ -1830,13 +1944,52 @@ def _verify_clips(texts, clips, english, model_name=None):
             f = Path(td) / ("%d.wav" % i)
             f.write_bytes(wav)
             try:
-                heard = (engine.transcribe(model, f, language="en" if english else "vi")
-                         .get("text") or "")
+                res = engine.transcribe(model, f, language="en" if english else "vi")
             except Exception:
                 out.append(None)
                 continue
-            a, b = _words_cmp(t, english), _words_cmp(heard, english)
-            out.append(difflib.SequenceMatcher(None, a, b).ratio() if a else None)
+            a = _words_cmp(t, english)
+            toks = []                       # (tu, bat dau, ket thuc) theo moc thoi gian Whisper
+            ws = []
+            for w in res.get("words") or []:    # Whisper tach "30" + "%" -> gop lai truoc khi so
+                txt = (w.get("text") or "").strip()
+                if ws and txt[:1] in "%°":
+                    ws[-1] = (ws[-1][0] + txt, ws[-1][1], float(w.get("end") or 0))
+                else:
+                    ws.append((txt, float(w.get("start") or 0), float(w.get("end") or 0)))
+            for txt, st, en in ws:
+                for tk in _words_cmp(txt, english):
+                    toks.append((tk, st, en))
+            b = [x[0] for x in toks] or _words_cmp(res.get("text") or "", english)
+            if not a:
+                out.append(None)
+                continue
+            sm = difflib.SequenceMatcher(None, a, b)
+            blocks = [m for m in sm.get_matching_blocks() if m.size]
+            if toks and blocks:
+                last = blocks[-1]
+                tail = len(b) - (last.b + last.size)       # so tu THUA sau tu cuoi khop
+                if last.a + last.size >= len(a) - 1 and tail == 0:
+                    # Whisper co the KHONG nghe ra am thua (bo qua vi ngan) -> do nang luong:
+                    # con tieng noi > 0.2s sau tu cuoi -> cat
+                    end_ok = toks[-1][2]
+                    try:
+                        if _voiced_after(wav, end_ok + 0.15) > 0.2:
+                            clips[i] = _cut_tail(wav, end_ok + 0.12)
+                            TRIM_LAST.append(round(end_ok + 0.12, 2))
+                    except Exception:
+                        pass
+                elif last.a + last.size >= len(a) - 1 and 0 < tail <= 3:
+                    end_ok = toks[last.b + last.size - 1][2]
+                    nxt = toks[last.b + last.size][1]
+                    cut = max(end_ok + 0.08, (end_ok + nxt) / 2.0)
+                    try:
+                        clips[i] = _cut_tail(wav, cut)
+                        b = b[:last.b + last.size]
+                        TRIM_LAST.append(round(cut, 2))
+                    except Exception:
+                        pass
+            out.append(difflib.SequenceMatcher(None, a, b).ratio())
     return out
 
 
@@ -1946,10 +2099,12 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if s.get("emph_phrases"):
             wav = _apply_emph_envelope(wav, t, s.get("emph_phrases"))
         semi, gain = _CLONE_EMO_FX.get(emo, (0, 0))
+        # moi doan da bi chuan hoa cung 1 do to -> cau vui / buon to nhu nhau (phang). Tra lai
+        # chenh lech to-nho theo cam xuc: vui/hao hung to hon, buon/thi tham nhe hon.
+        cap = float(clone._cfg("CLONE_EMO_GAIN_CAP", 1.5)) * k_emo
         if _STYLE_OF.get(emo) in have_styles:
-            gain = _GAIN_SPECIAL.get(emo, 0.0)     # da doc bang mau cam xuc that -> khong chinh to/nho them
-        else:
-            gain = _GAIN_SPECIAL.get(emo, max(_GAIN_CAP[0] * k_emo, min(_GAIN_CAP[1] * k_emo, gain)))
+            gain *= 0.6                          # mau cam xuc that da co san phan to/nho
+        gain = _GAIN_SPECIAL.get(emo, max(-cap, min(cap, gain)))
         gain += float(s.get("gain") or 0)
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
         by_seg[k] = (_fx_clip(wav, semi, gain, extra), t)
@@ -1968,6 +2123,13 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if nxt is not None and "pause" not in nxt:   # khoang nghi tu nhien giua cau
             gap = (_gap_after(t, english=english) * (_SLOW_GAP.get(_emo_name(s), 1.0) ** k_emo)
                    * float(gp.get("gap") or 1.0))
+            gap = _natural_gap(gap, t, nxt.get("text"), __import__("zlib").crc32(("%s|%d|%s" % (name, k, t)).encode("utf-8")))
             out.append(_silence(gap))
     from .tts import _concat_clips
-    return _concat_clips(out)
+    data, mime, ext = _concat_clips(out)
+    if clone._cfg("ROOM_TONE", True) and data[:4] == b"RIFF":
+        try:
+            data = _add_room_tone(data, _room_tone(name))
+        except Exception:
+            pass
+    return data, mime, ext
