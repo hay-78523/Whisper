@@ -156,14 +156,16 @@ def run(name, src=None):
 
 
 def make_va():
-    """Goi va: app/ + file chay o thu muc goc. KHONG dung toi du lieu khach (giong, tai khoan,
-    editions/ACTIVE) -> giai nen de len ban nao cung duoc."""
+    """Goi va: app/ + file chay o thu muc goc + cau hinh cac ban. KHONG dung toi du lieu khach
+    (giong, tai khoan, editions/ACTIVE) -> giai nen de len ban nao cung duoc."""
     import time
     repl = {}
     walk(ROOT / "app", "app/", repl)
     for f in TOP_FILES:
         if (ROOT / f).is_file():
             repl[f] = ROOT / f
+    for ed in editions():                      # cau hinh tung ban (vd hien du giong), khong co ACTIVE
+        walk(ROOT / "editions" / ed, "editions/%s/" % ed, repl)
     out = OUT / ("CapNhat_Code_%s.zip" % time.strftime("%Y%m%d_%H%M"))
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for arc, p in sorted(repl.items()):
