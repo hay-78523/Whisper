@@ -58,6 +58,7 @@ TTS_CHUNK_CHARS = 2500       # do dai moi khuc gui edge-tts
 TTS_CONCURRENCY = 6          # so khuc tao song song
 MAX_TTS_CHARS = 200000       # ~1 cuon truyen vua / lan long tieng
 MAX_UPLOAD_MB = 2000         # tran dung luong file upload (chong day o dia)
+DEFAULT_INTENSITY = "manh"   # do cam xuc mac dinh (nhe / vua / manh / rat_manh); cau sai chu tu doc lai
 AUTO_EMOTION = True          # kich ban khong co the -> AI bien kich tu gan cam xuc truoc khi doc
 MAX_PENDING_VOICES = 5       # moi nhan vien gui toi da 5 giong cho duyet cung luc
 VIENEU_PRECISION = "fp32"    # chat luong toi da; "int8" = nhanh hon ~1.6x neu may yeu

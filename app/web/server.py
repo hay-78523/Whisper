@@ -470,7 +470,8 @@ class Handler(BaseHTTPRequestHandler):
             if self._require():
                 from ..core import expressive
                 self._send(200, {"genres": expressive.genre_list(),
-                                 "intensities": expressive.intensity_list()})
+                                 "intensities": expressive.intensity_list(),
+                                 "default_intensity": getattr(config, "DEFAULT_INTENSITY", "vua")})
         elif route == "/api/clone_profile_info":
             s = self._require()
             if s:

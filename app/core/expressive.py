@@ -1998,7 +1998,8 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     genre: the loai video (GENRES) -> tong nen, toc do, ngat nghi rieng.
     intensity: do cam xuc (INTENSITY: nhe / vua / manh / rat_manh)."""
     gp = GENRES.get(genre or "") or {}
-    k_emo = INTENSITY.get(intensity or "vua", INTENSITY["vua"])[1]
+    from .. import config as _conf
+    k_emo = INTENSITY.get(intensity or getattr(_conf, "DEFAULT_INTENSITY", "vua"), INTENSITY["vua"])[1]
     from . import clone
     name = voice.split(":", 1)[1] if voice.startswith("c:") else voice
     english = not clone._is_vietnamese(strip_tags(text))
@@ -2068,23 +2069,29 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     texts = [t for _k, t, _s in items]
     speeds = [sp for _k, _t, sp in items]
 
-    def run(idx, prog=None):
+    def run(idx, prog=None, calm_down=0):
         pick = lambda L: [L[i] for i in idx] if L else None
+        e2, c2 = pick(exs), pick(cfgs)
+        if calm_down and e2:
+            # doc lai cau bi SAI CHU: bot bieu cam + tang bam kich ban -> ro chu hon
+            # (cau doc dung giu nguyen cam xuc manh)
+            e2 = [round(max(0.3, x - 0.15 * calm_down), 3) for x in e2]
+            c2 = [round(min(0.7, x + 0.15 * calm_down), 3) for x in c2]
         return clone.synth_cues_clone(pick(texts), name, rate=base_rate, progress=prog,
                                       speeds=pick(speeds), styles=pick(styles),
-                                      exaggerations=pick(exs), cfgs=pick(cfgs))
+                                      exaggerations=e2, cfgs=c2)
     clips = run(list(range(len(items))), progress)
     # TU KIEM TRA: Whisper nghe lai tung doan; doan doc lech (nuot / doc sai chu) -> doc lai,
     # giu ban khop chu nhat. Tat: CLONE_VERIFY = False.
     if clone._cfg("CLONE_VERIFY", True):
-        floor = float(clone._cfg("CLONE_VERIFY_MIN", 0.85))
+        floor = float(clone._cfg("CLONE_VERIFY_MIN", 0.9))
         score = _verify_clips(texts, clips, english)
-        for _round in range(int(clone._cfg("CLONE_VERIFY_RETRY", 2))):
+        for _round in range(int(clone._cfg("CLONE_VERIFY_RETRY", 3))):
             bad = [i for i, sc in enumerate(score) if sc is not None and sc < floor]
             if not bad:
                 break
             try:
-                again = run(bad)
+                again = run(bad, calm_down=_round + 1)
             except Exception:
                 break
             new_sc = _verify_clips([texts[i] for i in bad], again, english)

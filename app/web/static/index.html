@@ -1148,7 +1148,7 @@
     (d.intensities || []).forEach(function (g) {
       var o = document.createElement('option'); o.value = g.id; o.textContent = g.label; isel.appendChild(o);
     });
-    isel.value = 'vua';
+    isel.value = d.default_intensity || 'manh';
   }).catch(function () {});
 
   document.getElementById('ai_annotate').addEventListener('click', function () {
@@ -1242,6 +1242,14 @@
               (rs.auto_genre ? ' (thể loại: ' + esc((gsel.querySelector('option[value="' + rs.auto_genre + '"]') || {}).textContent || rs.auto_genre) + ')' : '') +
               ' — kịch bản có thẻ đã hiện trong ô soạn thảo, sửa rồi bấm tạo lại nếu muốn.' +
               (rs.auto_note ? '<br>⚠️ ' + esc(rs.auto_note) : '') + '</div>';
+          }
+          if (rs.voice_sim != null) {        // ban doc giong giong da chon bao nhieu %
+            var vp = Math.round(rs.voice_sim * 100), vn = (rs.voice || '').replace(/^c:/, '');
+            if (!rs.auto_script) st.innerHTML = '';   // xoa thanh tien do cu
+            st.style.display = 'block';
+            st.innerHTML += '<div style="margin-top:4px;color:' + (vp >= 80 ? 'var(--muted)' : '#b45309') + '">' +
+              (vp >= 80 ? 'Giống giọng ' : '⚠️ Bản đọc chỉ giống giọng ') + '<b>' + esc(vn) + '</b> ' + vp + '%' +
+              (vp >= 80 ? '' : ' — kiểm tra lại đã chọn đúng giọng chưa, hoặc thử đọc lại.') + '</div>';
           }
           var trans = (j.result && j.result.translated) || '';
           document.getElementById('t_transwrap').style.display = trans ? 'flex' : 'none';
