@@ -1111,22 +1111,22 @@ _CBX_EMO = {
 # toc do, do ngat nghi giua cau, do bieu cam them cho Chatterbox.
 # "goi_y" dua cho AI bien kich biet the loai can gan the ra sao.
 GENRES = {
-    "quang_cao": {"label": "Quảng cáo", "base": "quang cao", "speed": 1.04, "gap": 0.85,
+    "quang_cao": {"pitch": 0.4, "gain": 1.0, "k": 1.15, "label": "Quảng cáo", "base": "quang cao", "speed": 1.06, "gap": 0.8,
                   "ex": 0.08, "goi_y": "năng lượng cao, chốt ý dứt khoát, nhấn tên sản phẩm "
                   "và lợi ích, câu kêu gọi cuối bài [hào hứng]"},
-    "ke_chuyen": {"label": "Kể chuyện / Audiobook", "base": "ke chuyen", "speed": 0.96, "gap": 1.15,
+    "ke_chuyen": {"pitch": 0.0, "gain": 0.0, "k": 1.2, "label": "Kể chuyện / Audiobook", "base": "ke chuyen", "speed": 0.95, "gap": 1.2,
                   "ex": 0.0, "goi_y": "kể chậm rãi cuốn hút, đổi tông theo diễn biến, cao trào "
                   "[kịch tính], đoạn buồn [buồn], lời thoại nhân vật theo cảm xúc nhân vật"},
-    "tin_tuc": {"label": "Tin tức / Bình luận", "base": "nghiem tuc", "speed": 1.0, "gap": 0.95,
+    "tin_tuc": {"pitch": 0.0, "gain": 0.0, "k": 0.7, "label": "Tin tức / Bình luận", "base": "nghiem tuc", "speed": 1.0, "gap": 1.0,
                 "ex": -0.1, "goi_y": "trung lập, rõ ràng, ít cảm xúc; chỉ đổi tông khi tin "
                 "rất vui hoặc rất buồn"},
-    "tam_su": {"label": "Tâm sự / Podcast", "base": "diu dang", "speed": 0.95, "gap": 1.2,
+    "tam_su": {"pitch": -0.3, "gain": -1.5, "k": 0.95, "label": "Tâm sự / Podcast", "base": "diu dang", "speed": 0.92, "gap": 1.3,
                "ex": -0.05, "goi_y": "gần gũi như đang nói chuyện, ấm áp, nhiều chỗ [nghỉ] "
                "để suy ngẫm, [trầm ngâm] ở đoạn sâu lắng"},
-    "review": {"label": "Review / Giới thiệu sản phẩm", "base": "tu tin", "speed": 1.02, "gap": 0.9,
+    "review": {"pitch": 0.1, "gain": 0.5, "k": 1.0, "label": "Review / Giới thiệu sản phẩm", "base": "tu tin", "speed": 1.03, "gap": 0.9,
                "ex": 0.05, "goi_y": "tự tin, thân thiện, [ngạc nhiên] khi khen điểm nổi bật, "
                "[nghiêm túc] khi nói nhược điểm"},
-    "kinh_di": {"label": "Kinh dị / Bí ẩn", "base": "bi an", "speed": 0.93, "gap": 1.3,
+    "kinh_di": {"pitch": -0.5, "gain": -2.0, "k": 1.2, "label": "Kinh dị / Bí ẩn", "base": "bi an", "speed": 0.88, "gap": 1.45,
                 "ex": 0.0, "goi_y": "chậm, căng thẳng, [thì thầm] ở chi tiết rợn, [hồi hộp] "
                 "trước cao trào, [nghỉ dài] trước khi lộ bí mật"},
 }
@@ -2126,6 +2126,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     gp = GENRES.get(genre or "") or {}
     from .. import config as _conf
     k_emo = INTENSITY.get(intensity or getattr(_conf, "DEFAULT_INTENSITY", "vua"), INTENSITY["vua"])[1]
+    k_emo *= float(gp.get("k") or 1.0)          # the loai: tin tuc diem tinh, ke chuyen/kinh di rong hon
     from . import clone
     name = voice.split(":", 1)[1] if voice.startswith("c:") else voice
     english = not clone._is_vietnamese(strip_tags(text))
@@ -2232,11 +2233,11 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if s.get("emph_phrases"):
             wav = _apply_emph_envelope(wav, t, s.get("emph_phrases"))
         semi, gain = _CLONE_EMO_FX.get(emo, (0, 0))
-        semi += _EMO_PITCH.get(emo, 0.0) * k_emo
+        semi += _EMO_PITCH.get(emo, 0.0) * k_emo + float(gp.get("pitch") or 0.0)   # + chat giong the loai
         # moi doan da chuan hoa cung DO TO GIONG NOI -> tra lai chenh lech to-nho theo cam xuc
         # (vui/hao hung to hon, buon nhe hon, thi tham nhe han); cuoi bai chinh 1 lan cho ca bai.
         hi = float(clone._cfg("CLONE_EMO_GAIN_CAP", 3.5)) * k_emo
-        gain = max(-8.0, min(hi, gain * 0.8 * k_emo))
+        gain = max(-8.0, min(hi, gain * 0.8 * k_emo)) + float(gp.get("gain") or 0.0)
         gain += float(s.get("gain") or 0)
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
         if use_cbx:
@@ -2272,7 +2273,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
             pass
     if data[:4] == b"RIFF":
         try:
-            data = _master(data)
+            data = _master(data, -1.5 + min(0.0, float(gp.get("gain") or 0.0)))   # tam su / kinh di nhe hon
         except Exception:
             pass
     return data, mime, ext
