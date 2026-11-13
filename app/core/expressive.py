@@ -1886,6 +1886,7 @@ def _voice_max_chars(name, english=True):
 
 VERIFY_LAST = {}          # ket qua tu kiem tra lan doc gan nhat (de bao cao / test)
 TRIM_LAST = []            # moc cat am thua cuoi doan (de test)
+MISS_LAST = []            # doan thieu chu then chot / keo dai chu (de test)
 
 
 def _words_cmp(t, english):
@@ -1905,6 +1906,93 @@ def _cut_tail(wav, t_end):
     for k in range(f):
         a[len(a) - 1 - k] = int(a[len(a) - 1 - k] * (k / float(f)))
     return clone._wav_write(sr, a)
+
+
+_KEY_WORDS_EN = set(("zero one two three four five six seven eight nine ten eleven twelve thirteen "
+                     "fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty "
+                     "sixty seventy eighty ninety hundred thousand million billion percent degrees "
+                     "celsius fahrenheit dollars cents").split())
+_KEY_WORDS_VI = set(("không một hai ba bốn năm sáu bảy tám chín mười mươi trăm nghìn ngàn triệu tỷ "
+                     "phần trăm độ đồng").split())
+
+
+def _key_tokens(text, english):
+    """Chu THEN CHOT bat buoc phai doc du: con so, don vi, ten rieng / chu cai viet hoa
+    (khong tinh chu dau cau). Thieu 1 chu = doc sai (ti le khop cao van khong cho qua)."""
+    keys = []
+    words = re.findall(r"[\w']+", (text or "").replace("-", " "))
+    first = True
+    for w in words:
+        lw = w.lower()
+        if lw in (_KEY_WORDS_EN if english else _KEY_WORDS_VI):
+            keys.append(lw)
+        elif w[:1].isupper() and not first and lw not in ("i", "i'm", "i'll", "i've", "i'd"):
+            keys.append(lw)
+        first = False
+    sent_starts = {m.group(1).lower() for m in re.finditer(r"(?:^|[.!?]\s+)([\w']+)", text or "")}
+    return [k for k in keys if k not in sent_starts or k in _KEY_WORDS_EN or k in _KEY_WORDS_VI]
+
+
+_LETTER_SOUND = {v.lower(): k.lower() for k, v in _LETTER_EN.items()}   # "see" -> "c"
+
+
+def _name_like(k, h):
+    """Ten rieng nghe gan dung: cung chu cai dau, dai tuong duong, giong >= 60% ("zennic" ~ "zenith")."""
+    import difflib
+    return (h[:1] == k[:1] and abs(len(h) - len(k)) <= 2
+            and difflib.SequenceMatcher(None, k, h).ratio() >= 0.6)
+
+
+def _missing_keys(keys, heard, english):
+    """So chu then chot bi THIEU. So / don vi: phai khop dung (Whisper nghe so rat chuan).
+    Ten rieng: cho gan dung (Whisper hay viet sai ten: "Zenith C" -> "ZenniC").
+    Chu cai rieng ("see" = C): nhan "c" / "see" / "sea" hoac dinh cuoi ten ("zennic")."""
+    import difflib
+    from collections import Counter
+    nums = _KEY_WORDS_EN if english else _KEY_WORDS_VI
+    have = Counter(heard)
+    miss = 0
+    need_num = Counter(k for k in keys if k in nums)
+    miss += sum(max(0, n - have.get(k, 0)) for k, n in need_num.items())
+    for k in set(k for k in keys if k not in nums):
+        if k in have:
+            continue
+        if k in _LETTER_SOUND:
+            ch = _LETTER_SOUND[k]
+            alt = {ch, k, {"see": "sea", "bee": "be", "tee": "tea", "pee": "pea", "why": "y"}.get(k, k)}
+            if alt & set(heard) or any(len(h) > 3 and h.endswith(ch) for h in heard):
+                continue
+            miss += 1
+            continue
+        if any(_name_like(k, h) for h in heard):
+            continue
+        miss += 1
+    return miss
+
+
+def _canon_names(heard, keys, english):
+    """Dua ten rieng Whisper viet sai ve dung cach viet cua kich ban truoc khi tinh ti le khop
+    ("zennic" -> "zenith", "see"; "zenith c" -> "zenith", "see")."""
+    import difflib
+    nums = _KEY_WORDS_EN if english else _KEY_WORDS_VI
+    names = [k for k in keys if k not in nums and k not in _LETTER_SOUND]
+    after = {keys[i]: keys[i + 1] for i in range(len(keys) - 1) if keys[i + 1] in _LETTER_SOUND}
+    out = []
+    for h in heard:
+        if h in _LETTER_SOUND.values() or h in ("sea", "be", "tea", "pea", "y"):
+            lk = next((k for k, c in _LETTER_SOUND.items() if c == h or
+                       {"sea": "see", "be": "bee", "tea": "tee", "pea": "pee", "y": "why"}.get(h) == k), None)
+            out.append(lk if lk in keys else h)
+            continue
+        best = next((k for k in names if _name_like(k, h)), None)
+        if best and h != best:
+            out.append(best)
+            nxt = after.get(best)
+            if nxt and h.endswith(_LETTER_SOUND[nxt]):      # "zennic": ten + chu cai dinh lien
+                out.append(nxt)
+            continue
+        out.append(h)
+    return out
 
 
 def _voiced_after(wav, t0):
@@ -1957,9 +2045,15 @@ def _verify_clips(texts, clips, english, model_name=None):
                     ws[-1] = (ws[-1][0] + txt, ws[-1][1], float(w.get("end") or 0))
                 else:
                     ws.append((txt, float(w.get("start") or 0), float(w.get("end") or 0)))
-            for txt, st, en in ws:
-                for tk in _words_cmp(txt, english):
+            long_word = False
+            lim = float(clone._cfg("CLONE_VERIFY_MAX_WORD_SEC", 1.5))
+            for wi, (txt, st, en) in enumerate(ws):
+                tks = _words_cmp(txt, english)
+                for tk in tks:
                     toks.append((tk, st, en))
+                # Whisper gop "65°C" = 4 chu -> cho phep dai tuong ung; chu cuoi doan bo qua
+                if wi < len(ws) - 1 and (en - st) > max(lim, 0.55 * len(tks) + 0.6):
+                    long_word = True
             b = [x[0] for x in toks] or _words_cmp(res.get("text") or "", english)
             if not a:
                 out.append(None)
@@ -1989,7 +2083,17 @@ def _verify_clips(texts, clips, english, model_name=None):
                         TRIM_LAST.append(round(cut, 2))
                     except Exception:
                         pass
-            out.append(difflib.SequenceMatcher(None, a, b).ratio())
+            ratio = difflib.SequenceMatcher(None, a, _canon_names(b, _key_tokens(t, english), english)).ratio()
+            # thieu CHU THEN CHOT (so, don vi, ten rieng) -> coi nhu sai, du ti le khop cao
+            # dem tren CA CAU Whisper nghe (de "Zenith C" -> "zenith see" giong kich ban)
+            heard_all = list(b) + _words_cmp(res.get("text") or "", english)
+            missing = _missing_keys(_key_tokens(t, english), heard_all, english)
+            # chu bi KEO DAI bat thuong (model "lap cho trong" khi nuot chu) -> sai
+            stretched = long_word
+            if missing or stretched:
+                ratio = min(ratio, 0.5)
+                MISS_LAST.append({"doan": i, "thieu": missing, "keo_dai": stretched})
+            out.append(ratio)
     return out
 
 
