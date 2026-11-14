@@ -53,7 +53,7 @@ _EN_EMO = {"normal": "binh thuong", "neutral": "binh thuong", "happy": "vui",
            "storytelling": "ke chuyen", "narrator": "ke chuyen", "whisper": "thi tham",
            "whispering": "thi tham", "angry": "gian du", "scared": "so hai", "afraid": "so hai",
            "surprised": "ngac nhien", "gentle": "diu dang", "soft": "diu dang",
-           "tender": "nung niu", "tired": "met moi", "mysterious": "bi an",
+           "tender": "nung niu", "nang niu": "nung niu", "tired": "met moi", "mysterious": "bi an",
            "urgent": "gap gap", "hurried": "gap gap", "cold": "lanh lung", "proud": "tu hao",
            "sarcastic": "cham biem"}
 _EN_EVT = {"laugh": "cuoi", "laughs": "cuoi", "laughing": "cuoi", "chuckle": "cuoi nhe",
