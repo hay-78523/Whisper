@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """KIEM TRA CAM XUC + DO GIONG cua giong clone — chay tren may GPU, gui BAO_CAO.csv cho ky thuat.
 
-Moi giong doc CUNG 1 cau voi 5 the: [binh thuong] [vui] [gian du] [buon] [thi tham]
+Moi giong doc CUNG 1 cau voi 6 the: [binh thuong] [vui] [ngac nhien] [gian du] [buon] [thi tham]
 (cung cau -> khac nhau chi do cam xuc). Do tren tung ban doc:
   * giong_giong  : % giong giong goc (muc tieu >= 80%)
   * cao_do (Hz), len_xuong (cung), do_manh (dB), thoi_luong (giay)
@@ -26,12 +26,13 @@ os.environ.setdefault("HF_HOME", str(ROOT / "data" / "hf_cache"))
 from app.core import clone, expressive                     # noqa: E402
 
 OUT = ROOT / "kiem_tra_cam_xuc"
-EMOS = ["bình thường", "vui", "giận dữ", "buồn", "thì thầm"]
+EMOS = ["bình thường", "vui", "ngạc nhiên", "giận dữ", "buồn", "thì thầm"]
 TEXT = {"en": "I can't believe this is really happening right now, after all this time.",
         "vi": "Tôi không thể tin chuyện này thật sự đang xảy ra, sau ngần ấy thời gian."}
 # (cam xuc, chi so, huong so voi ban thuong): +1 = phai lon hon, -1 = phai nho hon
 CHECKS = [("vui", "f0", 1), ("vui", "db", 1), ("giận dữ", "db", 1), ("giận dữ", "f0", 1),
-          ("buồn", "db", -1), ("buồn", "dur", 1), ("thì thầm", "db", -1), ("buồn", "rng", -1)]
+          ("buồn", "db", -1), ("buồn", "dur", 1), ("thì thầm", "db", -1), ("buồn", "rng", -1),
+          ("ngạc nhiên", "f0", 1), ("ngạc nhiên", "rng", 1)]
 
 
 def prosody(wav):

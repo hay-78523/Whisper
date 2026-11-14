@@ -601,6 +601,8 @@ def _fast_prompt(sents, target, ctx=""):
         "Từ nhấn: cứ 2-3 câu chọn 1 cụm 1-3 từ quan trọng nhất (tên sản phẩm, con số, lợi ích chính, "
         "chi tiết then chốt) — chép ĐÚNG nguyên văn cụm đó trong câu. "
         "Thẻ [nghỉ]: thêm sau câu mở đầu gây tò mò và ngay trước câu chốt / tiết lộ; KHÔNG đặt ở câu cuối. "
+        "[ngạc nhiên] CHỈ cho câu hỏi gây tò mò hoặc chi tiết thật sự bất ngờ (con số ấn tượng, điều không ngờ); "
+        "câu kể / gợi hình dung ('Imagine…', 'Hãy tưởng tượng…') dùng [dịu dàng] hoặc [kể chuyện]. "
         "KHÔNG viết lại câu, không giải thích.\n"
         "Ví dụ dòng trả về: 3|bí ẩn nghỉ|chiếc ghe ma   hoặc   5|hào hứng|30%\n\nCÂU:\n" + numbered)
 
@@ -1103,8 +1105,14 @@ for _e in ("buon", "that vong", "nghen ngao", "met moi", "buon ngu", "tram ngam"
     _STYLE_PREF[_e] = ("sad", "calm")
 for _e in ("gian du", "kho chiu", "het", "phan dien"):
     _STYLE_PREF[_e] = ("angry", "hype")
-for _e in ("thi tham", "bi an", "hoi hop", "so hai", "lo lang", "nung niu"):
+for _e in ("thi tham", "bi an", "hoi hop", "so hai", "lo lang"):
     _STYLE_PREF[_e] = ("soft", "calm")
+for _e in ("ngac nhien",):
+    _STYLE_PREF[_e] = ("surprise", "hype")
+for _e in ("nghiem tuc", "lanh lung", "nghi ngo"):
+    _STYLE_PREF[_e] = ("serious", "")
+for _e in ("diu dang", "nung niu", "lang man", "binh tinh", "nhe nhom"):
+    _STYLE_PREF[_e] = ("warm", "calm")
 
 
 def _style_for(emo, have):
@@ -1172,7 +1180,8 @@ GENRES = {
 # MACH CAM XUC tung the loai (AI bien kich bam theo) + DINH NGHIA (de doan dung the loai)
 GENRE_ARC = {
     "quang_cao": ("ban/gioi thieu san pham de khach MUA: co keu goi mua, gia, giam gia, dat hang",
-                  "câu mở gây tò mò [ngạc nhiên] hoặc [hào hứng] -> giới thiệu sản phẩm [tự tin] -> "
+                  "câu mở 'Imagine…/Hãy tưởng tượng…' [dịu dàng], câu hỏi gây tò mò [ngạc nhiên] -> "
+                  "giới thiệu sản phẩm [hào hứng] hoặc [tự tin] -> "
                   "tính năng, con số [tự tin] -> lợi ích, cảm giác khi dùng [vui] -> nỗi lo của khách "
                   "[nghiêm túc] -> câu chốt kêu gọi mua [hào hứng]"),
     "ke_chuyen": ("ke 1 cau chuyen co nhan vat, dien bien",

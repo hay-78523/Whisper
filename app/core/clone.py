@@ -675,9 +675,15 @@ STYLE_TEXTS_EN.update({
            "her so much.",
     "angry": "No! I told you a hundred times, and you still did it anyway! I am done with this!",
     "soft": "Shh... come closer. Don't make a sound. Someone is standing right outside the door.",
+    "surprise": "Wait... what? No way! You're telling me this actually works? That's incredible!",
+    "serious": "Here are the facts. Every year, millions of people lose sleep, and it costs far "
+               "more than most of us realize.",
+    "warm": "Hey, it's okay. Take a slow breath. I'm right here with you, and everything is "
+            "going to be just fine.",
 })
 STYLE_GEN_PARAMS = {"hype": (0.95, 0.3), "calm": (0.3, 0.5),        # (exaggeration, cfg)
-                    "sad": (0.5, 0.5), "angry": (1.1, 0.3), "soft": (0.35, 0.5)}
+                    "sad": (0.5, 0.5), "angry": (1.1, 0.3), "soft": (0.35, 0.5),
+                    "surprise": (0.9, 0.3), "serious": (0.45, 0.5), "warm": (0.4, 0.5)}
 
 
 def can_make_styles():
@@ -1717,8 +1723,10 @@ def _request(port, payload, out_dir, n_expected, progress=None, timeout=7200, st
     return result
 
 
-STYLE_NAMES = ("hype", "calm", "sad", "angry", "soft", "alt1", "alt2", "alt3")
-EMO_STYLES = ("sad", "angry", "soft")      # mau cam xuc THAT them (Chatterbox doc cau dung cam xuc)
+STYLE_NAMES = ("hype", "calm", "sad", "angry", "soft", "surprise", "serious", "warm",
+               "alt1", "alt2", "alt3")
+# mau cam xuc THAT them (Chatterbox doc cau co noi dung dung cam xuc bang chinh giong do)
+EMO_STYLES = ("sad", "angry", "soft", "surprise", "serious", "warm")
 ALT_STYLES = ("alt1", "alt2", "alt3")      # mau phu cung giong, cung nhip -> xoay vong cho doc bot don dieu
 
 
