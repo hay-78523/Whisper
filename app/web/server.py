@@ -414,6 +414,7 @@ class Handler(BaseHTTPRequestHandler):
                     # may tram / nhan vien: gui giong len -> cho Quan tri tren may chu duyet
                     "can_submit_voice": True,
                     "personal": bool(config.PERSONAL_MODE),
+                    "lang_only": config.EDITION.get("lang_only") or "",
                     "auto_login": bool(s.get("personal")),
                 })
         elif route == "/api/voices":
@@ -704,6 +705,24 @@ class Handler(BaseHTTPRequestHandler):
                     sys.stderr.write("[web] %s duyet giong %s (gui boi %s)\n"
                                      % (s["user"], info["name"], info.get("created_by") or "?"))
                     self._send(200, {"ok": True, "profile": info})
+            elif route == "/api/admin/clone_style_add":
+                s = self._require("admin")
+                if s and self._require_host_admin(s):
+                    qs = parse_qs(urlparse(self.path).query)
+                    q = lambda k: (qs.get(k) or [""])[0]
+                    tmp, _n = self._read_body_to_temp("style_sample")
+                    try:
+                        data = Path(tmp).read_bytes()
+                    finally:
+                        try:
+                            os.unlink(tmp)
+                        except OSError:
+                            pass
+                    dn = q("denoise")
+                    res = clone.add_style_sample(q("name"), q("style"), data, filename=q("filename"),
+                                                 ref_text=q("ref_text"),
+                                                 denoise=True if dn == "1" else False if dn == "0" else None)
+                    self._send(200, {"ok": True, "sample": res})
             elif route == "/api/admin/clone_make_styles":
                 s = self._require("admin")
                 if s and self._require_host_admin(s):

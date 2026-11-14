@@ -384,6 +384,10 @@
     if (openVcBtn) {
       openVcBtn.style.display = (me.can_add_voice || me.can_submit_voice) ? 'inline-flex' : 'none';
     }
+    if (me.lang_only) {               // ban chi 1 ngon ngu (Starlight: tieng Viet)
+      var vl = document.getElementById('vc_lang');
+      if (vl) { vl.value = me.lang_only; Array.prototype.forEach.call(vl.options, function (o) { if (o.value !== me.lang_only) o.remove(); }); }
+    }
     // khong phai Quan tri tren may chu -> giong gui len phai cho duyet
     window._vcNeedsApproval = !me.can_add_voice;
     var pn = document.getElementById('vc_pending_note');

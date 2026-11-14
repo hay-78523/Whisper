@@ -72,6 +72,31 @@
     </div>
   </div>
 
+  <!-- HOP THOAI TAI MAU CAM XUC THAT CHO 1 GIONG -->
+  <div id="style_modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,12,18,0.75); padding:40px 14px; overflow-y:auto">
+    <div style="max-width:560px; margin:0 auto; background:var(--card, #fff); color:var(--text, #111); border:1px solid var(--border, #e5e7eb); border-radius:16px; padding:22px">
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <div style="font-weight:800; font-size:16px">Mẫu cảm xúc — <span id="sty_voice"></span></div>
+        <button class="btn" id="sty_close">Đóng</button>
+      </div>
+      <div class="muted" style="font-size:12.5px; margin:8px 0 12px; line-height:1.55">
+        Người lồng tiếng thu <b>1 câu 5–12 giây</b> nói đúng cảm xúc (vd buồn thì nói câu buồn, giọng buồn thật).
+        Tool kiểm tra đúng là cùng người rồi dùng mẫu này cho các thẻ tương ứng — cảm xúc thật, không phải chỉnh âm.
+      </div>
+      <div id="sty_have" style="font-size:12.5px; margin-bottom:10px"></div>
+      <div class="formrow" style="flex-wrap:wrap; gap:8px">
+        <select id="sty_kind" class="inp"></select>
+        <input id="sty_file" class="inp" type="file" accept="audio/*,video/*,.mp4,.mov,.m4a,.mp3,.wav" style="width:230px">
+        <label class="muted" style="font-size:12px"><input type="checkbox" id="sty_denoise"> Khử nhạc nền</label>
+      </div>
+      <input id="sty_text" class="inp" placeholder="Lời thoại trong mẫu (bỏ trống để tool tự nghe)" style="width:100%; margin-top:8px">
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center">
+        <button class="btn" id="sty_go">Tải mẫu lên</button>
+        <span id="sty_msg" class="muted" style="font-size:12.5px"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- QUAN LY TAI KHOAN & PHIEN LAM VIEC -->
   <div class="card" id="userscard">
     <h2>Quản lý tài khoản &amp; Phiên làm việc</h2>
@@ -719,7 +744,8 @@
       if (p.sample_match != null) srcInfo.push('độ khớp ' + Math.round(p.sample_match * 100) + '%');
       var sa = p.styles_auto || {};
       var styleLabels = (p.styles || []).map(function (s) {
-        var lb = s === 'hype' ? 'hào hứng' : (s === 'calm' ? 'trầm dịu' : s);
+        var lb = ((p.style_labels || {})[s] || s).toLowerCase();
+        if ((p.styles_method || {})[s] === 'tai_len') lb += ' (thu thật)';
         return sa[s] != null ? lb + ' (tự tạo ' + Math.round(sa[s] * 100) + '%)' : lb;
       });
       tr.innerHTML =
@@ -783,6 +809,12 @@
       }
 
       if (CL.canAddVoice) {
+        var sb2 = document.createElement('button');
+        sb2.className = 'btn';
+        sb2.style.marginRight = '8px';
+        sb2.textContent = 'Mẫu cảm xúc';
+        sb2.addEventListener('click', function () { openStyleModal(p); });
+        cell.appendChild(sb2);
         var del = document.createElement('button');
         del.className = 'btn';
         del.textContent = 'Xóa';
@@ -906,6 +938,43 @@
         loadClones();
       }).catch(function () { msg.textContent = 'Lỗi mạng.'; _pendingSig = null; loadClones(); });
   }
+
+  // ---------- TAI MAU CAM XUC THAT ----------
+  var styModal = document.getElementById('style_modal'), styVoice = null;
+  document.getElementById('sty_close').addEventListener('click', function () { styModal.style.display = 'none'; loadClones(); });
+  function openStyleModal(p) {
+    styVoice = p.name;
+    document.getElementById('sty_voice').textContent = p.name;
+    var labels = p.style_labels || {}, have = p.styles || [], sel = document.getElementById('sty_kind');
+    sel.innerHTML = '';
+    Object.keys(labels).forEach(function (k) {
+      var o = document.createElement('option'); o.value = k;
+      o.textContent = labels[k] + (have.indexOf(k) >= 0 ? ' (đã có — tải lại để thay)' : ''); sel.appendChild(o);
+    });
+    var hv = have.filter(function (k) { return labels[k]; }).map(function (k) { return labels[k]; });
+    document.getElementById('sty_have').innerHTML = 'Đang có: <b>' + (hv.length ? esc(hv.join(', ')) : 'chưa có mẫu cảm xúc nào') + '</b>';
+    document.getElementById('sty_msg').textContent = '';
+    document.getElementById('sty_file').value = ''; document.getElementById('sty_text').value = '';
+    styModal.style.display = 'block';
+  }
+  document.getElementById('sty_go').addEventListener('click', function () {
+    var f = document.getElementById('sty_file').files[0], msg = document.getElementById('sty_msg'), btn = this;
+    if (!f) { msg.textContent = 'Chọn file mẫu trước.'; return; }
+    btn.disabled = true; msg.textContent = 'Đang kiểm tra giọng và nghe lời thoại…';
+    var qs = 'name=' + encodeURIComponent(styVoice) + '&style=' + encodeURIComponent(document.getElementById('sty_kind').value) +
+      '&filename=' + encodeURIComponent(f.name) + '&ref_text=' + encodeURIComponent(document.getElementById('sty_text').value.trim()) +
+      '&denoise=' + (document.getElementById('sty_denoise').checked ? '1' : '0');
+    fetch('/api/admin/clone_style_add?' + qs, { method: 'POST', body: f })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok) { msg.innerHTML = '<span style="color:var(--err)">' + esc(res.j.error || 'Lỗi') + '</span>'; return; }
+        var sm = res.j.sample || {};
+        msg.innerHTML = '✓ Đã lưu mẫu <b>' + esc(document.getElementById('sty_kind').selectedOptions[0].textContent.split(' (')[0]) + '</b>' +
+          (sm.sim != null ? ' — giống giọng ' + Math.round(sm.sim * 100) + '%' : '') + ' (' + sm.duration + 's): <i>' + esc(sm.text || '') + '</i>';
+        loadClones();
+      }).catch(function () { btn.disabled = false; msg.textContent = 'Lỗi mạng.'; });
+  });
 
   // ---------- TU TAO MAU CAM XUC (Chatterbox GPU) ----------
   function makeStyles(body, btn) {
@@ -1085,6 +1154,10 @@
     .then(function (m) {
       myName = m.user;
       window.PERSONAL = !!m.personal;
+      if (m.lang_only) {               // ban chi 1 ngon ngu: chi them giong ngon ngu do
+        var cl = document.getElementById('cl_lang');
+        if (cl) { cl.value = m.lang_only; Array.prototype.forEach.call(cl.options, function (o) { if (o.value !== m.lang_only) o.remove(); }); }
+      }
       if (m.personal) {                 // ban ca nhan: an phan danh cho doanh nghiep
         var ch = document.querySelector('#clonecard h2'); if (ch) ch.textContent = 'Kho giọng clone';
         ['auditcard', 'pendingcard', 'userscard'].forEach(function (id) {

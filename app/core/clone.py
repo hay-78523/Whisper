@@ -322,6 +322,8 @@ def list_profiles(include_all_en=False, include_pending=False):
     only = _c.EDITION.get("voices")                 # ban chi gom mot so giong
     if isinstance(only, list):
         all_names = [n for n in all_names if n in only or profile_meta(n).get("custom_added")]
+    if _c.EDITION.get("lang_only"):                 # ban chi dung 1 ngon ngu (Starlight: tieng Viet)
+        all_names = [n for n in all_names if profile_lang(n) == _c.EDITION["lang_only"]]
     en_cfg = _c.EDITION.get("en_voices")            # "all" = hien moi giong Anh
     if en_cfg == "all":
         return [n for n in all_names if include_pending or not is_pending(n)]
@@ -436,6 +438,8 @@ def profile_info(name):
         "sample_match": m.get("sample_match"),
         "voice_sim": m.get("voice_sim"),
         "styles_auto": m.get("styles_auto") or {},
+        "styles_method": m.get("styles_method") or {},
+        "style_labels": STYLE_LABELS,
         "trimmed": bool(m.get("trimmed")),
         "has_sample": (d / "sample.wav").exists() or (d / "test.mp3").exists(),
         "styles": sorted(available_styles(name)),
@@ -781,6 +785,62 @@ def make_emotion_styles(name, force=False, tries=3, say=None):
     return report
 
 
+STYLE_LABELS = {"hype": "Hào hứng / vui", "calm": "Trầm / bình tĩnh", "sad": "Buồn",
+                "angry": "Giận dữ", "soft": "Thì thầm / bí ẩn", "surprise": "Ngạc nhiên",
+                "serious": "Nghiêm túc", "warm": "Ấm áp / dịu dàng"}
+
+
+def add_style_sample(name, style, audio_bytes, filename=None, ref_text="", denoise=None):
+    """TAI LEN MAU CAM XUC THAT cho 1 giong (nguoi long tieng thu 1 cau vui / buon / gian...).
+    Cach chac chan nhat de giong Viet co cam xuc that (khong co Chatterbox tieng Viet).
+    Mau phai CUNG NGUOI voi giong goc (>= CLONE_STYLE_UPLOAD_MIN, mac dinh 0.75)."""
+    name = safe_name(name)
+    d = profile_dir(name)
+    if not (d / "ref.wav").exists():
+        raise ValueError("Không có giọng '%s'." % name)
+    if style not in STYLE_LABELS:
+        raise ValueError("Loại mẫu cảm xúc không hợp lệ.")
+    work = Path(tempfile.mkdtemp(prefix="style_up_"))
+    try:
+        ext = (Path(filename or "").suffix or ".bin").lower()
+        raw = work / ("raw" + ext)
+        raw.write_bytes(audio_bytes)
+        out = work / "ref.wav"
+        try:
+            dur, _trim = _prepare_ref(raw, out, denoise=bool(ext in _VIDEO_EXTS) if denoise is None
+                                      else bool(denoise))
+        except Exception as e:
+            raise ValueError("Không đọc được file mẫu (%s)." % e)
+        if dur < 2.5:
+            raise ValueError("Mẫu quá ngắn (%.1f giây) — cần 5–12 giây nói rõ cảm xúc." % dur)
+        got = _voicesim(_sim_refs(name), [out])
+        sim = got[0] if got else None
+        floor = float(_cfg("CLONE_STYLE_UPLOAD_MIN", 0.75))
+        if sim is not None and sim < floor:
+            raise ValueError("Mẫu chỉ giống giọng '%s' %d%% (cần từ %d%%) — có thể là người khác, "
+                             "lẫn nhạc nền hoặc quá ngắn." % (name, round(sim * 100), round(floor * 100)))
+        txt = (ref_text or "").strip()
+        if not txt:
+            txt = (_transcribe_ref(out, name=name).get("text") or "").strip()
+        if not txt:
+            raise ValueError("Không nghe được lời trong mẫu — nhập lời thoại mẫu bằng tay.")
+        sd = d / "styles" / style
+        sd.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(out, sd / "ref.wav")
+        (sd / "ref.txt").write_text(txt, encoding="utf-8")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    m = profile_meta(name)
+    auto = dict(m.get("styles_auto") or {})
+    if sim is not None:
+        auto[style] = round(sim, 4)
+    meth = dict(m.get("styles_method") or {})
+    meth[style] = "tai_len"
+    _save_meta(name, styles=sorted(available_styles(name)), styles_auto=auto, styles_method=meth)
+    return {"style": style, "sim": None if sim is None else round(sim, 4), "text": txt,
+            "duration": round(dur, 2)}
+
+
 def needs_styles(name):
     """Giong can tao (lai) mau cam xuc: thieu hype/calm, hoac co mau BIEN DOI ma may da co
     Chatterbox (giong Anh) -> lam lai cho cam xuc that."""
@@ -789,7 +849,8 @@ def needs_styles(name):
     if profile_lang(name) == "en" and can_make_styles():
         if set(EMO_STYLES) - available_styles(name):      # thieu mau buon / gian / thi tham
             return True
-        return bool(profile_meta(name).get("styles_method") or {})
+        meth = profile_meta(name).get("styles_method") or {}
+        return any(v == "bien_doi" for v in meth.values())   # mau tai len: giu nguyen
     return False
 
 
@@ -1764,8 +1825,8 @@ def style_speed(name, style):
     chinh 200 -> doan vui bi doc voi, nghe gap)."""
     d = profile_dir(safe_name(name))
     # mau BIEN DOI: nhanh/cham la CO Y (mot phan cua cam xuc) -> khong bu lai
-    if (profile_meta(safe_name(name)).get("styles_method") or {}).get(style) == "bien_doi":
-        return 1.0
+    if (profile_meta(safe_name(name)).get("styles_method") or {}).get(style) in ("bien_doi", "tai_len"):
+        return 1.0                   # mau bien doi / mau that tai len: nhip la CO Y
     if style in EMO_STYLES:          # buon cham / gian nhanh la CAM XUC -> khong bu toc do
         return 1.0
     a = _ref_wpm(d / "ref.wav", d / "ref.txt")

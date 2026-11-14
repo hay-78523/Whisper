@@ -35,6 +35,7 @@ TOP_FILES = ["HUONG-DAN.txt", "BANG-THE-BIEU-CAM.txt", "run.py", "Start-Windows.
 STORE = (".safetensors", ".pt", ".mp3", ".zip", ".dll", ".pyd", ".exe", ".bin", ".so",
          ".whl", ".png", ".jpg")
 SKIP = {"__pycache__", ".DS_Store"}
+GON = False
 
 
 def editions():
@@ -61,9 +62,10 @@ def walk(d, prefix, out):
 def plan(name, ed, tmp):
     """-> (file can ghi {ten trong zip: file}, ham 'giu ban ghi cu khong')."""
     repl = {}
+    excl = tuple(ed.get("exclude") or ())         # file/thu muc ban nay KHONG kem (vd model giong Anh)
     walk(ROOT / "app", "app/", repl)
     for f in TOP_FILES:
-        if (ROOT / f).is_file():
+        if (ROOT / f).is_file() and not (excl and f.startswith(excl)):
             repl[f] = ROOT / f
     walk(ROOT / "editions" / name, "editions/%s/" % name, repl)
     if ed.get("brand_from"):
@@ -81,6 +83,8 @@ def plan(name, ed, tmp):
     def keep(n):
         if n in repl or n == "PERSONAL" or n.startswith(("app/", "editions/")):
             return False                          # thay bang ban moi / dung dung cau hinh ban nay
+        if excl and n.startswith(excl):
+            return False
         if isinstance(only, list) and n.startswith("data/voice_profiles/"):
             parts = n.split("/")
             return len(parts) < 4 or parts[2] in only
@@ -120,6 +124,26 @@ def patch(zp, repl, keep):
         raise
 
 
+def compact(zp):
+    """Ghi lai zip CHI gom file dang dung (bo du lieu mo coi sau nhieu lan cap nhat / file da loai)
+    -> zip nho lai that. Can cho trong bang kich thuoc goi moi."""
+    import time
+    with zipfile.ZipFile(zp) as z:
+        need = sum(i.compress_size for i in z.infolist())
+    if shutil.disk_usage(zp.parent).free < need * 1.05:
+        print("[!] O dia khong du %.1f GB de ghi gon %s — bo qua buoc ghi gon." % (need / 1e9, zp.name))
+        return
+    tmp = zp.with_name(zp.name + ".gon.tmp")
+    t = time.time()
+    with zipfile.ZipFile(zp) as zin, zipfile.ZipFile(tmp, "w", allowZip64=True) as zout:
+        for info in zin.infolist():
+            with zin.open(info) as src, zout.open(info, "w", force_zip64=True) as dst:
+                shutil.copyfileobj(src, dst, 1 << 22)
+    before = zp.stat().st_size
+    os.replace(tmp, zp)
+    print("    ghi gon: %.2f GB -> %.2f GB (%.0fs)" % (before / 1e9, zp.stat().st_size / 1e9, time.time() - t))
+
+
 def verify(zp, name, ed):
     z = zipfile.ZipFile(zp)
     n = z.namelist()
@@ -150,6 +174,8 @@ def run(name, src=None):
     with tempfile.TemporaryDirectory() as tmp:
         repl, keep = plan(name, ed, tmp)
         total, mb = patch(zp, repl, keep)
+    if GON:
+        compact(zp)
     count, voices = verify(zp, name, ed)
     print("[v] %-34s ban %-15s %s | %d file (+%.1f MB) | %d giong | kiem tra OK"
           % (zp.name, name, "CA NHAN" if ed.get("personal") else "doanh nghiep", count, mb, len(voices)))
@@ -178,7 +204,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ban", help="ten ban (%s) hoac all" % ", ".join(editions()))
     ap.add_argument("--tu", default=None, help="chua co zip cua ban nay -> chep tu zip nay")
+    ap.add_argument("--gon", action="store_true", help="ghi lai zip cho gon (bo du lieu thua/da loai)")
     a = ap.parse_args()
+    global GON
+    GON = a.gon
     if a.ban == "va":
         return make_va()
     for n in (editions() if a.ban == "all" else [a.ban]):

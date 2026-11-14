@@ -22,11 +22,13 @@
   ],
   "zip": "2_StarlightVoice_DoanhNghiep.zip",
   "personal": false,
-  "voices": null,
-  "en_voices": [
-    "ray",
-    "adam",
-    "brittney"
-  ],
-  "mo_ta": "Ban DOANH NGHIEP Starlight: dang nhap, may chu + may tram LAN, duyet giong, Audit Log."
+  "voices": [],
+  "en_voices": [],
+  "mo_ta": "Ban DOANH NGHIEP Starlight (chi giong tieng Viet): dang nhap, may chu + may tram LAN, duyet giong, Audit Log.",
+  "lang_only": "vi",
+  "exclude": [
+    "models_chatterbox/",
+    "Tao-Mau-Cam-Xuc.bat",
+    "tao_mau_cam_xuc.py"
+  ]
 }
