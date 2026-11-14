@@ -750,6 +750,7 @@
       });
       tr.innerHTML =
         '<td><b>' + esc(p.name) + '</b> <span class="chip" style="font-size:10px;padding:2px 6px">' + langBadge + '</span> ' + simBadge(p.voice_sim) +
+        (p.prosody_match != null ? ' <span class="chip" title="Nhịp điệu (nhấn, ngắt, lên xuống) giống bản thu gốc" style="font-size:10px;padding:2px 6px">nhịp điệu ' + Math.round(p.prosody_match * 100) + '%</span>' : '') +
         (srcInfo.length ? '<br><span class="muted" style="font-size:11px">' + esc(srcInfo.join(' · ')) + '</span>' : '') +
         (p.state === 'processing' ? '<br><span class="muted" style="font-size:11px">đang xử lý mẫu…</span>' : '') +
         (warn ? '<br><span class="muted" style="font-size:11px">' + esc(warn) + '</span>' : '') +

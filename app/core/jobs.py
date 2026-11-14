@@ -497,7 +497,7 @@ class JobManager(object):
                         genre=(genre or job.get("auto_genre")) if keep_tags else None,
                         intensity=intensity if keep_tags else None)
                 job.update(audio=data, mime=mime)
-                vsim = None
+                vsim = vpros = None
                 if voice.startswith("c:") and data[:4] == b"RIFF":
                     try:                         # ban doc giong giong da chon bao nhieu %
                         fd, tmpw = tempfile.mkstemp(suffix=".wav")
@@ -506,11 +506,13 @@ class JobManager(object):
                         nm = clone.safe_name(voice.split(":", 1)[1])
                         got = clone._voicesim(clone._sim_refs(nm), [tmpw])
                         vsim = round(got[0], 3) if got else None
+                        vpros = clone.prosody_match(nm, wav_path=tmpw)   # nhip dieu giong ban goc
                         os.unlink(tmpw)
                     except Exception:
                         vsim = None
                 job["result"] = {"translated": job.get("translated"),
                                  "mime": mime, "chars": len(current), "voice_sim": vsim,
+                                 "prosody_match": vpros,
                                  "voice": voice,
                                  "auto_script": job.get("auto_script"),
                                  "auto_genre": job.get("auto_genre"), "auto_note": auto_note}

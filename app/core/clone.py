@@ -437,6 +437,7 @@ def profile_info(name):
         "trim_range": m.get("trim_range"),
         "sample_match": m.get("sample_match"),
         "voice_sim": m.get("voice_sim"),
+        "prosody_match": m.get("prosody_match"),
         "styles_auto": m.get("styles_auto") or {},
         "styles_method": m.get("styles_method") or {},
         "style_labels": STYLE_LABELS,
@@ -648,6 +649,39 @@ def _sim_refs(name):
     """'Giong that' de so: ca file nguon dai neu co, khong thi mau chinh."""
     d = profile_dir(name)
     return [d / "source.wav"] if (d / "source.wav").exists() else [d / "ref.wav"]
+
+
+def prosody_signature(name, refresh=False):
+    """'Chu ky nhip dieu' cua giong THAT (file nguon dai neu co, khong thi mau chinh): cach nguoi
+    do don nhan, ngat cum, len xuong giong. Ban clone nen GIONG chu ky nay (khong ep soi noi)."""
+    m = profile_meta(name)
+    if m.get("prosody_goc") and not refresh:
+        return m["prosody_goc"]
+    from . import prosody
+    d = profile_dir(name)
+    src = next((d / f for f in ("source.wav", "test.mp3", "ref.wav") if (d / f).exists()), None)
+    try:
+        sig = prosody.measure(src) if src else None
+    except Exception:
+        sig = None
+    if sig:
+        _save_meta(name, prosody_goc=sig)
+    return sig
+
+
+def prosody_match(name, wav_path=None):
+    """Ban nghe thu (hoac wav_path) giong nhip dieu giong that bao nhieu (0..1); luu meta."""
+    from . import prosody
+    p = wav_path or sample_path(name)
+    if not p:
+        return None
+    try:
+        pc = prosody.closeness(prosody.measure(p), prosody_signature(name))
+    except Exception:
+        pc = None
+    if pc is not None and wav_path is None:
+        _save_meta(name, prosody_match=pc)
+    return pc
 
 
 def voice_similarity(name):
@@ -964,9 +998,12 @@ def _improve_similarity(name, say=None):
     if base is None:
         return None
     target = float(_cfg("CLONE_SIM_TARGET", 0.88))
+    p_target = float(_cfg("CLONE_PROSODY_TARGET", 0.75))
+    base_pc = prosody_match(name)
     m = profile_meta(name)
     cands = m.get("ref_cands") or []
-    if base >= target or not (d / "source.wav").exists() or len(cands) < 2:
+    good = base >= target and (base_pc is None or base_pc >= p_target)
+    if good or not (d / "source.wav").exists() or len(cands) < 2:
         return base
     from . import refpick
     import numpy as np
@@ -977,7 +1014,9 @@ def _improve_similarity(name, say=None):
     for c, sc in zip(others, ws):
         c["ref_sim"] = sc
     others.sort(key=lambda c: -(c.get("ref_sim") or 0))
-    best = {"sim": base, "match": m.get("sample_match")}
+    best = {"sim": base, "match": m.get("sample_match"), "pc": base_pc}
+    # diem tong: giong giong la chinh, giong nhip dieu cong them (cung giong -> chon ban tu nhien hon)
+    total = lambda sim, pc: sim + 0.3 * (pc if pc is not None else 0.5)
     y = refpick._load(d / "source.wav")
     bak = Path(tempfile.mkdtemp(prefix="simbak_"))
     try:
@@ -986,6 +1025,8 @@ def _improve_similarity(name, say=None):
         for idx, c in enumerate(others):
             # thu toi da n_try doan; con duoi 80% thi thu TIEP moi doan ung vien con lai
             if idx >= n_try and best["sim"] >= floor:
+                break
+            if best["sim"] >= target and (best["pc"] or 0) >= p_target:
                 break
             for f in ("ref.wav", "ref.txt", "sample.wav"):
                 if (d / f).exists():
@@ -997,24 +1038,27 @@ def _improve_similarity(name, say=None):
                 make_sample(name)
                 _sample_check(name)
                 sim = voice_similarity(name)
+                pc = prosody_match(name)
             except Exception:
-                sim = None
+                sim, pc = None, None
             match = profile_meta(name).get("sample_match")
             ok_text = match is None or best["match"] is None or match >= best["match"] - 0.05
-            say("Thử đoạn mẫu %.1f-%.1fs: giống giọng %s" % (
-                c["t0"], c["t1"], "?" if sim is None else "%.0f%%" % (sim * 100)))
-            if sim is not None and sim > best["sim"] + 0.005 and ok_text:
-                best = {"sim": sim, "match": match}
+            say("Thử đoạn mẫu %.1f-%.1fs: giống giọng %s, nhịp điệu %s" % (
+                c["t0"], c["t1"], "?" if sim is None else "%.0f%%" % (sim * 100),
+                "?" if pc is None else "%.0f%%" % (pc * 100)))
+            if (sim is not None and sim >= min(best["sim"], floor) and ok_text
+                    and total(sim, pc) > total(best["sim"], best["pc"]) + 0.005):
+                best = {"sim": sim, "match": match, "pc": pc}
                 _save_meta(name, ref_window=[c["t0"], c["t1"]], duration=c["dur"],
-                           ref_wpm=c["wpm"], ref_text_source="tự chọn đoạn GIỐNG GIỌNG nhất "
-                           "(%d%%) từ file nguồn" % round(sim * 100))
-                if sim >= target:
-                    break
+                           ref_wpm=c["wpm"], ref_text_source="tự chọn đoạn GIỐNG GIỌNG + NHỊP "
+                           "ĐIỆU nhất (%d%% / %s) từ file nguồn" % (
+                               round(sim * 100), "?" if pc is None else "%d%%" % round(pc * 100)))
             else:                            # khong hon -> tra lai mau cu
                 for f in ("ref.wav", "ref.txt", "sample.wav"):
                     if (bak / f).exists():
                         shutil.copy2(bak / f, d / f)
-                _save_meta(name, voice_sim=round(best["sim"], 4), sample_match=best["match"])
+                _save_meta(name, voice_sim=round(best["sim"], 4), sample_match=best["match"],
+                           prosody_match=best["pc"])
     finally:
         shutil.rmtree(bak, ignore_errors=True)
     return best["sim"]

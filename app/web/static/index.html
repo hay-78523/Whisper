@@ -1266,6 +1266,7 @@
             st.style.display = 'block';
             st.innerHTML += '<div style="margin-top:4px;color:' + (vp >= 80 ? 'var(--muted)' : '#b45309') + '">' +
               (vp >= 80 ? 'Giống giọng ' : '⚠️ Bản đọc chỉ giống giọng ') + '<b>' + esc(vn) + '</b> ' + vp + '%' +
+              (rs.prosody_match != null ? ' · nhịp điệu giống bản gốc ' + Math.round(rs.prosody_match * 100) + '%' : '') +
               (vp >= 80 ? '' : ' — kiểm tra lại đã chọn đúng giọng chưa, hoặc thử đọc lại.') + '</div>';
           }
           var trans = (j.result && j.result.translated) || '';
