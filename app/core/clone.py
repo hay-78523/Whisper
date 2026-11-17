@@ -2323,10 +2323,10 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
         if cfgs and i < len(cfgs) and cfgs[i]:
             it["cfg"] = float(cfgs[i])          # Chatterbox: do bam nhip rieng tung cam xuc
         if engine == "voxcpm" and vox_styles and i < len(vox_styles) and vox_styles[i] and (vox_force or not sty):
-            # khong co mau cam xuc THAT, hoac do cam xuc Manh / Rat manh -> chi dan bang loi
-            # (cam xuc ro hon, am sac lay tu mau chinh)
+            # khong co mau cam xuc THAT, hoac do cam xuc Manh / Rat manh -> chi dan bang loi.
+            # Co mau cam xuc THAT (sty) thi dung chinh doan that do lam am sac + chi dan -> cam xuc
+            # vua that vua dam; khong co thi am sac lay tu mau chinh.
             it["vox_style"] = vox_styles[i]
-            it["style"] = ""
         items.append(it)
     if not items:
         return [b""] * n

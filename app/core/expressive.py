@@ -2543,9 +2543,18 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         # (vui/hao hung to hon, buon nhe hon, thi tham nhe han); cuoi bai chinh 1 lan cho ca bai.
         hi = float(clone._cfg("CLONE_EMO_GAIN_CAP", 1.5)) * k_emo
         gain = max(-4.0, min(hi, gain * 0.4 * k_emo)) + float(gp.get("gain") or 0.0)
-        gain += float(s.get("gain") or 0)
+        if use_vox:
+            # VoxCPM2 TU the hien cam xuc (to-nho, nhanh-cham) khi doc -> KHONG tang giam am luong
+            # nhan tao theo cam xuc nua (nguoi dung: "cam xuc chu khong phai tang giam am luong")
+            gain = 0.0
+        gain += float(s.get("gain") or 0)          # [to] / [nho] nguoi dung tu go: van giu
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
-        if use_cbx or use_vox:
+        if use_vox:
+            # chi giu "Toc do" nguoi dung chon; nhanh / cham theo cam xuc do model tu doc
+            tempo = clone._rate_to_speed(base_rate)
+            if abs(tempo - 1.0) > 0.015:
+                extra.append("atempo=%.4f" % max(0.6, min(1.5, tempo)))
+        elif use_cbx:
             # Chatterbox / VoxCPM2 KHONG nhan toc do -> co gian tung cau (giu cao do): cau buon cham,
             # cau hao hung nhanh, va o "Toc do" cham/nhanh cung co tac dung
             # Chatterbox da tu doc nhanh khi hao hung -> chi duoc LAM CHAM (buon / o Toc do cham)
