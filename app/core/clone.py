@@ -459,7 +459,14 @@ def profile_info(name):
     if vs is not None and vs < float(_cfg("CLONE_SIM_WARN", 0.80)):
         warn.append("⚠ giống giọng gốc chỉ %d%% — nên dùng file mẫu DÀI 1-3 phút, sạch, "
                     "1 người nói để tool chọn được đoạn giống nhất" % round(vs * 100))
+    sep = m.get("separated") or {}
+    if sep.get("used") and m.get("ref_snr") is not None and m["ref_snr"] < 5:   # giong doc nhanh it cho lang: 5-7 dB van sach
+        warn.append("mẫu còn sót nhạc nền / méo sau khi tách (SNR %.0f dB) — nên dùng file sạch hơn"
+                    % m["ref_snr"])
     sm = m.get("sample_match")
+    if sm is not None and 0.85 <= sm < float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95)):
+        warn.append("đọc thử đúng %d%% (chưa đạt %d%%) — nghe lại bản thử trước khi dùng"
+                    % (sm * 100, float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95)) * 100))
     if sm is not None and sm < 0.85:
         warn.append("⚠ đọc thử chỉ đúng %d%% — mẫu có thể lẫn nhạc/tạp âm, quá ngắn, "
                     "nhiều người nói hoặc script sai: NÊN THAY MẪU KHÁC (6–11 giây, giọng rõ)"
@@ -493,6 +500,7 @@ def profile_info(name):
         "stage": m.get("stage"),
         "separated": m.get("separated"),
         "user_text_check": m.get("user_text_check"),
+        "quality_ok": m.get("quality_ok"),
         "warnings": warn,
     }
 
@@ -873,7 +881,8 @@ def _smart_ref(name):
              if not any(w["t0"] < b and w["t1"] > a for a, b in used)]   # khong trung mau cam xuc
     _save_meta(name, lang=lang_det, duration=round(m["dur"], 2),
                ref_text_source="tự chọn đoạn hay nhất từ file %.0fs" % (len(y) / refpick.SR),
-               styles=styles, ref_wpm=round(m["wpm"]),
+               styles=styles, ref_wpm=round(m["wpm"]), ref_snr=round(m.get("snr", 10.0), 1),
+               ref_foreign=m.get("foreign", 0),
                ref_window=[round(m["t0"], 2), round(m["t1"], 2)], ref_cands=cands)
     return True
 
@@ -1264,7 +1273,10 @@ def _improve_similarity(name, say=None):
     base_pc = prosody_match(name)
     m = profile_meta(name)
     cands = m.get("ref_cands") or []
-    good = base >= target and (base_pc is None or base_pc >= p_target)
+    m_min = float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95))
+    sim_ok = float(_cfg("CLONE_SIM_OK", 0.85))
+    good = (base >= target and (base_pc is None or base_pc >= p_target)
+            and (m.get("sample_match") is None or m["sample_match"] >= m_min))
     if good or not (d / "source.wav").exists() or len(cands) < 2:
         return base
     from . import refpick
@@ -1288,7 +1300,8 @@ def _improve_similarity(name, say=None):
             # thu toi da n_try doan; con duoi 80% thi thu TIEP moi doan ung vien con lai
             if idx >= n_try and best["sim"] >= floor:
                 break
-            if best["sim"] >= target and (best["pc"] or 0) >= p_target:
+            if (best["sim"] >= target and (best["pc"] or 0) >= p_target
+                    and (best["match"] is None or best["match"] >= m_min)):
                 break
             for f in ("ref.wav", "ref.txt", "sample.wav"):
                 if (d / f).exists():
@@ -1308,8 +1321,11 @@ def _improve_similarity(name, say=None):
             say("Thử đoạn mẫu %.1f-%.1fs: giống giọng %s, nhịp điệu %s" % (
                 c["t0"], c["t1"], "?" if sim is None else "%.0f%%" % (sim * 100),
                 "?" if pc is None else "%.0f%%" % (pc * 100)))
-            if (sim is not None and sim >= min(best["sim"], floor) and ok_text
-                    and total(sim, pc) > total(best["sim"], best["pc"]) + 0.005):
+            # ban doc thu cua doan cu doc SAI chu (< 95%) ma doan nay doc dung + van giong giong -> lay
+            fixes_text = (match is not None and match >= m_min and sim is not None and sim >= sim_ok
+                          and (best["match"] or 0) < m_min)
+            if fixes_text or (sim is not None and sim >= min(best["sim"], floor) and ok_text
+                              and total(sim, pc) > total(best["sim"], best["pc"]) + 0.005):
                 best = {"sim": sim, "match": match, "pc": pc}
                 _save_meta(name, ref_window=[c["t0"], c["t1"]], duration=c["dur"],
                            ref_wpm=c["wpm"], ref_text_source="tự chọn đoạn GIỐNG GIỌNG + NHỊP "
@@ -1355,6 +1371,11 @@ def _finish_profile(name):
         _improve_similarity(name)          # cham + tu nang do giong giong (khong bat buoc)
     except Exception as e:
         _save_meta(name, sim_error=str(e)[:200])
+    m = profile_meta(name)                 # dat = ban nghe thu DO MODEL DOC khop chu + giong giong
+    if m.get("sample_match") is not None:
+        _save_meta(name, quality_ok=bool(
+            m["sample_match"] >= float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95))
+            and (m.get("voice_sim") is None or m["voice_sim"] >= float(_cfg("CLONE_SIM_OK", 0.85)))))
     try:                                   # chua co mau cam xuc -> tu tao (Chatterbox / bien doi)
         if not ({"hype", "calm"} <= available_styles(name)):
             make_styles_auto(name)
@@ -1403,6 +1424,14 @@ def _auto_speed(name, target_wpm=None):
         return
     is_vi = profile_lang(name) == "vi"
     if is_vi:
+        # giong nguon doc QUA NHANH (quang cao) -> cham lai chut de ban clone co cho tho, khong nuot chu
+        wpm = float(profile_meta(name).get("ref_wpm") or 0)
+        fast = float(_cfg("CLONE_VI_FAST_WPM", 300))
+        if wpm >= fast:
+            _save_meta(name, speed=0.92, note="Mẫu đọc rất nhanh (%d âm tiết/phút) — tự giảm tốc độ "
+                                              "0.92 để bản clone có chỗ thở, đọc rõ chữ." % wpm)
+            make_sample(name)
+            return
         _save_meta(name, speed=1.0, note="Tự cân nhịp theo âm tiết mẫu tiếng Việt (tốc độ chuẩn 1.00).")
         return
     p = profile_dir(name) / "sample.wav"

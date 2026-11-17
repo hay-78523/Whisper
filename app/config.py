@@ -153,6 +153,11 @@ CLONE_REF_SEPARATE = "auto"
 CLONE_SEPARATE_MODEL = "htdemucs_ft"
 CLONE_SEPARATE_MIN_MUSIC_DB = -25.0   # nhac/giong (dB) do duoc cao hon muc nay moi dung ban tach (sach ~ -45)
 CLONE_SEPARATE_CLEAN_FLOOR_DB = -55.0  # khoang nghi lang hon muc nay (so voi giong) = mau phong thu -> bo qua
+# Kiem tra cuoi khi them giong = file NGHE THU do model doc ra (khong phai Whisper nghe mau ngan):
+# chua dat thi tu thu cac doan mau ung vien khac trong file nguon.
+CLONE_SAMPLE_MATCH_MIN = 0.95  # Whisper nghe ban doc thu phai khop >= 95% chu
+CLONE_SIM_OK = 0.85            # giong giong goc toi thieu de nhan doan thay the
+CLONE_VI_FAST_WPM = 300        # mau tieng Viet nhanh hon muc nay (am tiet/phut) -> speed 0.92
 CLONE_SR = 24000             # F5 lam viec o 24kHz — khop luon voi track lap rap
 
 # --- Dich "xin" bang AI (tuy chon, nang chat luong dich len muc long tieng chuyen nghiep) ---
