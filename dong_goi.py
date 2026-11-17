@@ -74,11 +74,13 @@ def plan(name, ed, tmp):
     act.write_text(name, encoding="utf-8")
     repl["editions/ACTIVE"] = act
     only = ed.get("voices")
+    fresh = set()                                 # giong co ban moi tren may -> thay TRON thu muc
     if isinstance(only, list):                    # ban chi gom mot so giong: them giong con thieu
         for v in only:
             d = ROOT / "data" / "voice_profiles" / v
             if d.is_dir():
                 walk(d, "data/voice_profiles/%s/" % v, repl)
+                fresh.add(v)
 
     def keep(n):
         if n in repl or n == "PERSONAL" or n.startswith(("app/", "editions/")):
@@ -87,6 +89,8 @@ def plan(name, ed, tmp):
             return False
         if isinstance(only, list) and n.startswith("data/voice_profiles/"):
             parts = n.split("/")
+            if len(parts) >= 4 and parts[2] in fresh:
+                return False                      # file cu cua giong vua thay (vd mau cam xuc da bo)
             return len(parts) < 4 or parts[2] in only
         return True
     return repl, keep
