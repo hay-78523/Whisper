@@ -142,6 +142,8 @@ CLONE_POST_FADE_MS = 10      # fade in/out chong tieng "tach" khi lap track
 CLONE_REF_MAX_SEC = 11.0     # < 12s: mau dai hon F5 tu cat audio nhung GIU script -> doc lan script vao ket qua
 CLONE_REF_MIN_SEC = 3.0      # ngan hon se canh bao
 CLONE_REF_DENOISE = False    # bat neu mau co tieng on nen (co the lam mat hoi)
+CLONE_DENOISE_FLOOR_DB = -40.0  # chi loc on (afftdn) khi nen on cao hon muc nay (so voi giong)
+CLONE_DENOISE_MAX_DROP = 0.03   # loc xong giong giong tut qua muc nay -> giu ban khong loc
 CLONE_REF_TRANSCRIBE_MODEL = "large-v3-turbo"  # model Whisper dung de tu lay script mau (chinh xac ca khi co nhac nen)
 # Tach nhac nen (Demucs htdemucs_ft, chi giu giong) TRUOC khi chon mau / lay loi mau. Mau quang cao
 # co nhac: clone thang chi doc dung ~60% chu va Whisper nghe ao ("Hay subscribe cho kenh...").
