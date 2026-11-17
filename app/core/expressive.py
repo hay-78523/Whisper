@@ -1519,39 +1519,125 @@ _VI_WORD_LOANS = {
     "vitamin": "vi ta min", "collagen": "cô la gen", "serum": "se rum",
     "toner": "tôn nờ", "lotion": "lô sần", "cream": "cờ rim", "cushion": "cút sần",
     "gpu": "gi pi iu", "cpu": "xi pi iu", "ram": "ram", "vram": "vi ram",
-    "ssd": "ét ét đê", "pc": "pi xi", "ai": "ây ai", "api": "ây pi ai",
+    "ssd": "ét ét đê", "pc": "pi xi", "api": "ây pi ai",
     "kol": "kây ô eo", "koc": "kây ô xi", "usb": "iu ét bi", "hdmi": "hát đê mờ i",
     "fps": "ép pi ét", "4k": "bốn ca", "8k": "tám ca", "5g": "năm gờ", "4g": "bốn gờ",
+    # cong viec / van phong
+    "team": "tim", "teamwork": "tim guốc", "deadline": "đét lai", "project": "pờ rô dét",
+    "email": "i meo", "e-mail": "i meo", "gmail": "gi meo", "meeting": "mít tinh",
+    "online meeting": "on lai mít tinh", "zoom": "dum", "teams": "tim", "slide": "sờ lai",
+    "file": "phai", "folder": "phô đơ", "excel": "ếch xeo", "word": "uơ", "powerpoint": "pao ơ poi",
+    "photoshop": "phô tô sóp", "canva": "can va", "capcut": "cáp cát", "office": "óp phít",
+    "windows": "uyn đâu", "laptop": "láp tóp", "tablet": "táp lét", "smartphone": "smát phôn",
+    "phone": "phôn", "card": "cạc", "headphone": "hét phôn", "earphone": "ia phôn",
+    "chatgpt": "chát gi pi ti", "gpt": "gi pi ti", "gemini": "giê mi nai", "openai": "âu pần ây ai",
+    "ok": "ô kê", "okay": "ô kê", "hashtag": "hát tác", "feedback": "phít bách",
+    "content": "con ten", "creator": "cờ ri ây tơ", "fanpage": "phan pết", "fan": "phan",
+    "page": "pết", "post": "pốt", "story": "sto ri", "reels": "riu", "short": "sọt", "shorts": "sọt",
+    "subscribe": "sắp sờ crai", "subscriber": "sắp sờ crai bơ", "view": "viu", "views": "viu",
+    "data": "đa ta", "cloud": "cờ lao", "server": "sơ vơ", "online": "on lai",
+    "megapixel": "mê ga pích seo", "pixel": "pích seo", "zoom quang học": "dum quang học",
+    "wi-fi": "goai phai", "usb-c": "iu ét bi xi", "type-c": "tai pờ xi", "touch": "tát",
+    "game show": "gêm sâu", "show": "sâu", "event": "i ven", "concert": "con sợt",
+    "booking": "búc kinh", "check-in": "chếch in", "check-out": "chếch ao", "menu": "mê nu",
+    "size": "sai", "form": "phom", "outfit": "ao phít", "item": "ai tâm", "kit": "kít",
+    "home": "hôm", "house": "hao", "coffee": "cà phê", "cafe": "cà phê", "pizza": "pi da",
+    "sale off": "sêu óp", "cashback": "kết bách", "banking": "ban kinh", "momo": "mô mô",
+    "logo": "lô gô", "banner": "ban nơ", "poster": "pốt tơ", "mockup": "mốc cắp",
+    "unboxing": "ăn bốc xinh", "vlog": "vi lốc", "blog": "bờ lốc", "vlogger": "vi lốc gơ",
+    "tiktoker": "tích tốc cơ", "youtuber": "diu túp bơ", "streamer": "sờ tri mơ",
+    "mood": "mút", "vibe": "vai", "chill": "chiu", "cool": "cun", "nice": "nai",
+    "wow": "quao", "baby": "bê bi", "boss": "bót",
 }
+# viet tat TIENG VIET: doc thanh chu o MOI engine (khong danh van kieu tieng Anh)
+_VI_ABBR = {
+    "tp.hcm": "thành phố Hồ Chí Minh", "tphcm": "thành phố Hồ Chí Minh", "hcm": "Hồ Chí Minh",
+    "tp": "thành phố", "hn": "Hà Nội", "vn": "Việt Nam", "ubnd": "ủy ban nhân dân",
+    "thpt": "trung học phổ thông", "thcs": "trung học cơ sở", "clb": "câu lạc bộ",
+    "bhxh": "bảo hiểm xã hội", "bhyt": "bảo hiểm y tế", "cskh": "chăm sóc khách hàng",
+    "ctv": "cộng tác viên", "nv": "nhân viên", "kh": "khách hàng", "sp": "sản phẩm",
+}
+_VI_ABBR_RE = re.compile(r"\b(" + "|".join(re.escape(k) for k in sorted(_VI_ABBR, key=len, reverse=True)) + r")\b", re.I)
 _VI_WORD_LOANS_RE = re.compile(
     r"\b(" + "|".join( sorted(_VI_WORD_LOANS.keys(), key=len, reverse=True) ) + r")\b",
     flags=re.I,
 )
 
 
-def _normalize_vi_loanwords(text):
-    """Tach tu ghep CamelCase (NovaWatch -> Nova Watch, TechZone -> Tech Zone) va
-    chuyen tu vay muon tieng Anh pho bien sang phien am tieng Viet tu nhien."""
+# don vi dinh lien sau so (120Hz, 5000mAh, 256GB, 65W): doc thanh chu, KHONG de tach CamelCase
+_VI_UNITS = {
+    "mah": "mi li am pe giờ", "ghz": "ghi ga héc", "mhz": "mê ga héc", "khz": "ki lô héc", "hz": "héc",
+    "tb": "tê ra bai", "gb": "ghi ga bai", "mb": "mê ga bai", "kb": "ki lô bai",
+    "kw": "ki lô oát", "w": "oát", "mm": "mi li mét", "cm": "xen ti mét", "km": "ki lô mét",
+    "kg": "ki lô gam", "mg": "mi li gam", "ml": "mi li lít", "inch": "inh", "mp": "mê ga pích seo",
+    "fps": "hình mỗi giây",
+}
+_VI_UNITS_RE = re.compile(r"(\d)\s*(" + "|".join(sorted(_VI_UNITS, key=len, reverse=True)) + r")\b", re.I)
+
+# ten chu cai tieng Anh theo cach nguoi Viet hay doc (dung danh van chu viet tat: GPT, SPF, A19)
+_VI_LETTERS = {"a": "ây", "b": "bi", "c": "xi", "d": "đi", "e": "i", "f": "ép", "g": "gi", "h": "ếch",
+               "i": "ai", "j": "giây", "k": "kây", "l": "eo", "m": "em", "n": "en", "o": "ô", "p": "pi",
+               "q": "kiu", "r": "a", "s": "ét", "t": "ti", "u": "iu", "v": "vi", "w": "đắp bờ liu",
+               "x": "ích", "y": "goai", "z": "dét"}
+# am tiet tieng Viet hop le (khong dau) -> chu IN HOA kieu "MUA", "BAN" la tieng Viet, khong danh van
+_VI_SYLLABLE_RE = re.compile(r"^(ngh|ng|nh|ch|gh|gi|kh|ph|qu|th|tr|[bcdđghklmnpqrstvx])?"
+                             r"[aăâeêioôơuưy]{1,3}(ch|ng|nh|[cmnpt])?$")
+
+
+def _spell_acronym(m):
+    letters, digits = m.group(1), m.group(2) or ""
+    low = letters.lower()
+    if not digits and (len(letters) < 2 or _VI_SYLLABLE_RE.match(low)):
+        return m.group(0)
+    out = " ".join(_VI_LETTERS.get(c, c) for c in low)
+    if digits:
+        out += " " + _num_words_vi(digits)
+    return out
+
+
+def _normalize_vi_loanwords(text, keep_english=False):
+    """Chuyen tu vay muon tieng Anh pho bien sang phien am tieng Viet tu nhien, doc don vi dinh
+    sau so, danh van chu viet tat con lai, roi moi tach tu ghep CamelCase (NovaWatch -> Nova Watch).
+    Thu tu quan trong: tra tu dien TRUOC khi tach CamelCase (iPhone, ChatGPT, YouTube, 5000mAh)."""
     t = text or ""
-    # Tach CamelCase: NovaWatch -> Nova Watch, TechZone -> Tech Zone, iPhone -> i Phone
-    t = re.sub(r"([a-zà-ỹ])([A-Z])", r"\1 \2", t)
     # Gach ngang dai giua cau (NovaWatch 5 — chạm để bứt phá) -> dau phay de F5 ngat nhip muot
     t = re.sub(r"\s*[—–]+\s*", ", ", t)
+    t = _VI_UNITS_RE.sub(lambda m: m.group(1) + " " + _VI_UNITS[m.group(2).lower()], t)
+    t = _VI_ABBR_RE.sub(lambda m: _VI_ABBR[m.group(1).lower()], t)
+    t = re.sub(r"(?<=[\w])(\++)(?=[\s,.!?;:)]|$)", lambda m: " cộng" * len(m.group(1)), t)
+    if keep_english:
+        # VoxCPM2 doc DUOC tieng Anh: giu nguyen chu Anh (do thu: ChatGPT, Photoshop, Wi-Fi, USB-C
+        # deu dung; phien am "chát gi pi ti" lai bi nghe thanh "chắc gì PT"). Chi doc so hieu 4 so.
+        return re.sub(r"\b([A-Z]{2,6})\s*(\d{4,})\b",
+                      lambda m: m.group(1) + " " + " ".join(_DIGITS_VI[int(c)] for c in m.group(2)), t)
     for pat, repl in _VI_PHRASE_LOANS:
         t = re.sub(pat, repl, t, flags=re.I)
+    t = _VI_WORD_LOANS_RE.sub(lambda m: _VI_WORD_LOANS[m.group(1).lower()], t)
+    # "AI" (tri tue nhan tao) chi khi VIET HOA — "ai" thuong la tu tieng Viet ("không ai", "ai cũng")
+    t = re.sub(r"\bAI\b", "ây ai", t)
+    # so hieu sau ma san pham (RTX 4060, Galaxy S24 Ultra 5000): 4 chu so tro len doc tung chu so
+    t = re.sub(r"\b([A-Z]{2,6})\s*(\d{4,})\b",
+               lambda m: m.group(1) + " " + " ".join(_DIGITS_VI[int(c)] for c in m.group(2)), t)
+    # chu viet tat IN HOA con lai (GPT, SPF, A19) -> danh van ten chu cai
+    t = re.sub(r"\b([A-Z]{1,6})(\d{1,5})?\b(?![\-'][a-z])", _spell_acronym, t)
+    # Tach CamelCase con lai: NovaWatch -> Nova Watch, TechZone -> Tech Zone (chi khi chu truoc la
+    # chu THUONG that — "GIẢM" khong bi tach thanh "GIẢ M")
+    t = re.sub(r"(\w)([A-Z])", lambda m: m.group(1) + (" " if m.group(1).islower() else "") + m.group(2), t)
+    # tra tu dien lan 2 cho tung manh vua tach (Nova Watch -> nô va goát)
     t = _VI_WORD_LOANS_RE.sub(lambda m: _VI_WORD_LOANS[m.group(1).lower()], t)
     return t
 
 
-def normalize_numbers_vi(text):
-    """Chuyen so, tien te, ngay thang, gio, %, tu vay muon sang chu tieng Viet de F5-VI doc ro va bieu cam."""
+def normalize_numbers_vi(text, keep_english=False):
+    """Chuyen so, tien te, ngay thang, gio, %, tu vay muon sang chu tieng Viet de F5-VI doc ro va bieu cam.
+    keep_english=True (VoxCPM2): giu nguyen tu tieng Anh, chi doc so / don vi / viet tat tieng Viet."""
     t = text or ""
     t = re.sub(r"\s*&\s*", " và ", t)
     t = re.sub(r"\bVNĐ\b|\bVND\b", " đồng ", t, flags=re.I)
     # Cum 24/7, 24/24 pho bien trong quang cao
     t = re.sub(r"\b24\s*/\s*7\b", "hai mươi tư trên bảy", t)
     t = re.sub(r"\b24\s*/\s*24\b", "hai mươi tư trên hai mươi tư", t)
-    t = _normalize_vi_loanwords(t)
+    t = _normalize_vi_loanwords(t, keep_english=keep_english)
     if not re.search(r"\d", t):
         return re.sub(r"[ \t]{2,}", " ", t).strip()
     # ngay dd/mm/yyyy
@@ -2199,11 +2285,11 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     from . import clone
     name = voice.split(":", 1)[1] if voice.startswith("c:") else voice
     english = not clone._is_vietnamese(strip_tags(text))
+    eng = clone.engine_for(english)
     if english:
         text = normalize_numbers_en(text)
     else:
-        text = normalize_numbers_vi(text)
-    eng = clone.engine_for(english)
+        text = normalize_numbers_vi(text, keep_english=(eng == "voxcpm"))
     use_cbx = english and eng == "chatterbox"
     use_vox = eng == "voxcpm"                 # VoxCPM2: ca Anh + Viet, cung khong nhan toc do
     if use_cbx or use_vox:
