@@ -2343,12 +2343,15 @@ def _verify_clips(texts, clips, english, model_name=None):
                 continue
             f = Path(td) / ("%d.wav" % i)
             f.write_bytes(wav)
+            # cau TIENG ANH xen trong kich ban Viet ("It's time to treat yourself.") -> nghe bang
+            # tieng Anh (nghe bang tieng Viet thi Whisper bo qua ca cau -> diem 0, doc lai vo ich)
+            seg_en = english or (not clone._is_vietnamese(t) and bool(re.search(r"[A-Za-z]{2,}", t)))
             try:
-                res = engine.transcribe(model, f, language="en" if english else "vi")
+                res = engine.transcribe(model, f, language="en" if seg_en else "vi")
             except Exception:
                 out.append(None)
                 continue
-            a = _words_cmp(t, english)
+            a = _words_cmp(t, seg_en)
             toks = []                       # (tu, bat dau, ket thuc) theo moc thoi gian Whisper
             ws = []
             for w in res.get("words") or []:    # Whisper tach "30" + "%" -> gop lai truoc khi so
@@ -2360,13 +2363,13 @@ def _verify_clips(texts, clips, english, model_name=None):
             long_word = False
             lim = float(clone._cfg("CLONE_VERIFY_MAX_WORD_SEC", 1.5))
             for wi, (txt, st, en) in enumerate(ws):
-                tks = _words_cmp(txt, english)
+                tks = _words_cmp(txt, seg_en)
                 for tk in tks:
                     toks.append((tk, st, en))
                 # Whisper gop "65°C" = 4 chu -> cho phep dai tuong ung; chu cuoi doan bo qua
                 if wi < len(ws) - 1 and (en - st) > max(lim, 0.55 * len(tks) + 0.6):
                     long_word = True
-            b = [x[0] for x in toks] or _words_cmp(res.get("text") or "", english)
+            b = [x[0] for x in toks] or _words_cmp(res.get("text") or "", seg_en)
             if not a:
                 out.append(None)
                 continue
@@ -2395,14 +2398,14 @@ def _verify_clips(texts, clips, english, model_name=None):
                         TRIM_LAST.append(round(cut, 2))
                     except Exception:
                         pass
-            bb = _canon_names(b, _key_tokens(t, english), english)
-            if not english:
+            bb = _canon_names(b, _key_tokens(t, seg_en), seg_en)
+            if not seg_en:
                 bb = _forgive_tones(a, bb)
             ratio = difflib.SequenceMatcher(None, a, bb).ratio()
             # thieu CHU THEN CHOT (so, don vi, ten rieng) -> coi nhu sai, du ti le khop cao
             # dem tren CA CAU Whisper nghe (de "Zenith C" -> "zenith see" giong kich ban)
-            heard_all = list(b) + _words_cmp(res.get("text") or "", english)
-            missing = _missing_keys(_key_tokens(t, english), heard_all, english)
+            heard_all = list(b) + _words_cmp(res.get("text") or "", seg_en)
+            missing = _missing_keys(_key_tokens(t, seg_en), heard_all, seg_en)
             # chu bi KEO DAI bat thuong (model "lap cho trong" khi nuot chu) -> sai
             stretched = long_word
             if missing or stretched:
