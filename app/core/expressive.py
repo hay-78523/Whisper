@@ -2465,6 +2465,37 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
                                       speeds=pick(speeds), styles=pick(styles),
                                       exaggerations=e2, cfgs=c2, vox_styles=pick(vox_ctl),
                                       vox_force=vox_force and not calm_down)
+    def run_split(i):
+        """Doc lai 1 doan DAI bang cach tach theo dau phay thanh cum ngan (>= 4 tu), doc tung cum
+        roi ghep (nghi 0.16s) — cau ngan VoxCPM2 it nuot / doc lan chu hon. Khong tach duoc -> None."""
+        parts, cur = [], ""
+        for p in re.split(r"(?<=[,;:])\s+", texts[i]):
+            cur = (cur + " " + p).strip() if cur else p
+            if len(cur.split()) >= 4:
+                parts.append(cur)
+                cur = ""
+        if cur:
+            if parts:
+                parts[-1] += " " + cur
+            else:
+                parts.append(cur)
+        if len(parts) < 2:
+            return None
+        n = len(parts)
+        got = clone.synth_cues_clone(parts, name, rate=base_rate, speeds=[speeds[i]] * n,
+                                     styles=[styles[i]] * n if styles else None,
+                                     vox_styles=[vox_ctl[i]] * n if vox_ctl else None, vox_force=False)
+        if not all(got):
+            return None
+        sr, _c, a = clone._wav_read(got[0])
+        from array import array as _arr
+        out = _arr("h", a)
+        for w in got[1:]:
+            sr2, _c2, b = clone._wav_read(w)
+            out.extend(_arr("h", [0]) * int(sr * 0.16))
+            out.extend(b)
+        return clone._wav_write(sr, out)
+
     clips = run(list(range(len(items))), progress)
     # TU KIEM TRA: Whisper nghe lai tung doan; doan doc lech (nuot / doc sai chu) -> doc lai,
     # giu ban khop chu nhat. Tat: CLONE_VERIFY = False.
@@ -2477,6 +2508,18 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
                 break
             try:
                 again = run(bad, calm_down=_round + 1)
+                if use_vox and _round >= 1:
+                    # lan doc lai thu 2 tro di van sai: thu them cach TACH CUM ngan, giu ban dung hon
+                    for n_b, i in enumerate(bad):
+                        try:
+                            alt = run_split(i)
+                        except Exception:
+                            alt = None
+                        if alt:
+                            sc_a = _verify_clips([texts[i]], [alt], english)[0]
+                            sc_b = _verify_clips([texts[i]], [again[n_b]], english)[0] if again[n_b] else 0.0
+                            if sc_a is not None and (sc_b is None or sc_a > sc_b):
+                                again[n_b] = alt
             except Exception:
                 break
             new_sc = _verify_clips([texts[i] for i in bad], again, english)
