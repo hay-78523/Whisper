@@ -1629,6 +1629,11 @@ def _spell_acronym(m):
     return out
 
 
+_VOX_VIET = {"team": "tim", "teams": "tim", "card": "cạc", "like": "lai", "share": "se", "test": "tét",
+             "top": "tốp", "vip": "víp", "fan": "phan", "ok": "ô kê", "okay": "ô kê", "sale": "sêu"}
+_VOX_VIET_RE = re.compile(r"\b(" + "|".join(sorted(_VOX_VIET, key=len, reverse=True)) + r")\b", re.I)
+
+
 def _normalize_vi_loanwords(text, keep_english=False):
     """Chuyen tu vay muon tieng Anh pho bien sang phien am tieng Viet tu nhien, doc don vi dinh
     sau so, danh van chu viet tat con lai, roi moi tach tu ghep CamelCase (NovaWatch -> Nova Watch).
@@ -1640,6 +1645,9 @@ def _normalize_vi_loanwords(text, keep_english=False):
     t = _VI_ABBR_RE.sub(lambda m: _VI_ABBR[m.group(1).lower()], t)
     t = re.sub(r"(?<=[\w])(\++)(?=[\s,.!?;:)]|$)", lambda m: " cộng" * len(m.group(1)), t)
     if keep_english:
+        # tu Anh NGAN de lan voi tu Viet khi doc ke tieng Viet (do: "Team" -> nghe "thì", 3/3 lan)
+        # -> doc kieu Viet hoa nhu nguoi Viet van noi
+        t = _VOX_VIET_RE.sub(lambda m: _VOX_VIET[m.group(1).lower()], t)
         # VoxCPM2 doc DUOC tieng Anh: giu nguyen chu Anh (do thu: ChatGPT, Photoshop, Wi-Fi, USB-C
         # deu dung; phien am "chát gi pi ti" lai bi nghe thanh "chắc gì PT"). Chi doc so hieu 4 so.
         return re.sub(r"\b([A-Z]{2,6})\s*(\d{4,})\b",
