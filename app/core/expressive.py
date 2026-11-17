@@ -1564,7 +1564,7 @@ _VI_WORD_LOANS = {
     "photoshop": "phô tô sóp", "canva": "can va", "capcut": "cáp cát", "office": "óp phít",
     "windows": "uyn đâu", "laptop": "láp tóp", "tablet": "táp lét", "smartphone": "smát phôn",
     "phone": "phôn", "card": "cạc", "headphone": "hét phôn", "earphone": "ia phôn",
-    "chatgpt": "chát gi pi ti", "gpt": "gi pi ti", "gemini": "giê mi nai", "openai": "âu pần ây ai",
+    "chatgpt": "chát gi pi ti", "chat": "chát", "gpt": "gi pi ti", "gemini": "giê mi nai", "openai": "âu pần ây ai",
     "ok": "ô kê", "okay": "ô kê", "hashtag": "hát tác", "feedback": "phít bách",
     "content": "con ten", "creator": "cờ ri ây tơ", "fanpage": "phan pết", "fan": "phan",
     "page": "pết", "post": "pốt", "story": "sto ri", "reels": "riu", "short": "sọt", "shorts": "sọt",
@@ -2096,13 +2096,52 @@ TRIM_LAST = []            # moc cat am thua cuoi doan (de test)
 MISS_LAST = []            # doan thieu chu then chot / keo dai chu (de test)
 
 
+_VI_VOWELS = set("aăâeêioôơuưyàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
+
+
+def _vi_phon(tok):
+    """Chu tieng Viet -> dang AM DOC de so (Whisper ghi 'dây' cho 'giây' la nghe DUNG):
+    gi / d / r -> d, tr -> ch, s -> x (giong Bac doc nhu nhau)."""
+    if tok.startswith("gi") and len(tok) > 2 and tok[2] in _VI_VOWELS:
+        return "d" + tok[2:]
+    if tok.startswith("gi"):                     # gì, gìn -> dì, dìn
+        return "d" + tok[1:]
+    if tok.startswith("tr"):
+        return "ch" + tok[2:]
+    if tok[:1] == "r":
+        return "d" + tok[1:]
+    if tok[:1] == "s":
+        return "x" + tok[1:]
+    return tok
+
+
 def _words_cmp(t, english):
     t = (normalize_numbers_en(t) if english else normalize_numbers_vi(t)).lower()
     toks = re.findall(r"[\w']+", t.replace("-", " "))
     if english:                      # chu cai rieng "c" == "see" (Whisper ghi kieu nao cung duoc)
         toks = [_LETTER_EN.get(x.upper(), x).lower() if len(x) == 1 and x not in ("a", "i") else x
                 for x in toks]
+    else:
+        toks = [_vi_phon(x) for x in toks]
     return toks
+
+
+def _no_tone(w):
+    w = unicodedata.normalize("NFD", w)
+    return "".join(c for c in w if unicodedata.category(c) != "Mn").replace("đ", "d")
+
+
+def _forgive_tones(a, b):
+    """Chu tu tieng Anh phien am Whisper ghi khac dau ('chat' / 'chát') -> coi nhu khop:
+    tra lai b da thay cac tu chi khac DAU THANH bang tu cua a (cung vi tri)."""
+    import difflib
+    out = list(b)
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
+        if op == "replace" and (i2 - i1) == (j2 - j1):
+            for k in range(i2 - i1):
+                if _no_tone(a[i1 + k]) == _no_tone(b[j1 + k]):
+                    out[j1 + k] = a[i1 + k]
+    return out
 
 
 def _cut_tail(wav, t_end):
@@ -2294,7 +2333,10 @@ def _verify_clips(texts, clips, english, model_name=None):
                         TRIM_LAST.append(round(cut, 2))
                     except Exception:
                         pass
-            ratio = difflib.SequenceMatcher(None, a, _canon_names(b, _key_tokens(t, english), english)).ratio()
+            bb = _canon_names(b, _key_tokens(t, english), english)
+            if not english:
+                bb = _forgive_tones(a, bb)
+            ratio = difflib.SequenceMatcher(None, a, bb).ratio()
             # thieu CHU THEN CHOT (so, don vi, ten rieng) -> coi nhu sai, du ti le khop cao
             # dem tren CA CAU Whisper nghe (de "Zenith C" -> "zenith see" giong kich ban)
             heard_all = list(b) + _words_cmp(res.get("text") or "", english)

@@ -130,6 +130,11 @@ CLONE_ENGINE = EDITION.get("clone_engine") or "auto"
 VOX_CFG = 2.0                # do bam mau giong / kich ban cua VoxCPM2 (mac dinh cua hang)
 VOX_STEPS = 10               # so buoc khuech tan (10 = mac dinh hang; 16 min hon, cham hon)
 VOX_MAX_CHARS = 220          # doan dai nhat moi lan doc
+# TU KIEM TRA tung doan bang Whisper sau khi doc (sai chu -> doc lai, giu ban dung nhat).
+# Ban test (edition.json): large-v3-turbo + chi dat khi dung 100% + doc lai toi da 4 lan.
+CLONE_VERIFY_MODEL = EDITION.get("verify_model") or "small"
+CLONE_VERIFY_MIN = float(EDITION.get("verify_min") or 0.9)
+CLONE_VERIFY_RETRY = int(EDITION.get("verify_retry") or 3)
 
 # --- Hau ky am thanh (chay trong tien trinh chinh, thuan Python) ---
 CLONE_POST_TRIM = True       # cat im lang dau/cuoi tung doan -> khop timestamp
