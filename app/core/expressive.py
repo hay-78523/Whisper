@@ -603,6 +603,11 @@ def _fast_prompt(sents, target, ctx=""):
         "Thẻ [nghỉ]: thêm sau câu mở đầu gây tò mò và ngay trước câu chốt / tiết lộ; KHÔNG đặt ở câu cuối. "
         "[ngạc nhiên] CHỈ cho câu hỏi gây tò mò hoặc chi tiết thật sự bất ngờ (con số ấn tượng, điều không ngờ); "
         "câu kể / gợi hình dung ('Imagine…', 'Hãy tưởng tượng…') dùng [dịu dàng] hoặc [kể chuyện]. "
+        "QUẢNG CÁO: câu hỏi mở đầu gợi tò mò -> [tinh nghịch]; câu mời 'đừng bỏ lỡ', câu tiết lộ ưu đãi / "
+        "điểm đặc biệt / con số -> [hào hứng]; câu kêu gọi hành động cuối bài (mua ngay, đặt hàng, liên hệ, "
+        "đừng chần chừ, số lượng có hạn) -> [gấp gáp] hoặc [hào hứng], TUYỆT ĐỐI KHÔNG [nghiêm túc] / [dịu dàng]; "
+        "mô tả thiết kế / chất lượng -> [tự tin] hoặc [dịu dàng] để có đoạn lắng trước khi bùng lên. "
+        "Mỗi bài phải có ít nhất 3 tông khác nhau, có lúc lắng lúc bùng nổ — đừng để cả bài một màu. "
         "KHÔNG viết lại câu, không giải thích.\n"
         "Ví dụ dòng trả về: 3|bí ẩn nghỉ|chiếc ghe ma   hoặc   5|hào hứng|30%\n\nCÂU:\n" + numbered)
 
@@ -817,6 +822,13 @@ _HAPPY_TAGS = {"vui", "hao hung", "ngac nhien", "tu hao", "het", "quang cao", "t
                "kich tinh", "gap gap"}
 
 
+_CUE_CTA = re.compile(r"(?i)(đừng chần chừ|nhanh tay|số lượng (ưu đãi )?có hạn|chỉ còn|đặt hàng|mua ngay|chốt đơn|"
+                      r"liên hệ (với chúng tôi )?ngay|inbox ngay|order (now|today)|buy now|đăng ký ngay|"
+                      r"ngay hôm nay|kẻo lỡ|đừng bỏ lỡ|hãy chọn ngay|sở hữu ngay|thử ngay)")
+_CUE_URGENT = re.compile(r"(?i)(đừng chần chừ|nhanh tay|có hạn|chỉ còn|kẻo lỡ|sắp hết|cuối cùng)")
+_FLAT_TAGS = _CALM_TAGS | {"nghiem tuc", "nhe nhom", "tu tin", "tu hao", "ke chuyen", "binh thuong"}
+
+
 def _fix_obvious_tags(text):
     """The cam xuc AI gan TRAI NGUOC dau hieu ro trong cau -> sua: cau than / hoi bat ngo ma gan
     [dịu dàng]/[nghi ngờ]... -> [ngạc nhiên] hoac [hào hứng]; cau tiec nuoi / buon ma gan the vui
@@ -828,10 +840,20 @@ def _fix_obvious_tags(text):
         seg = re.split(r"(?<=[.!?…])\s+", body.strip())[0] if body.strip() else ""
         if not seg:
             continue
-        if tag in _CALM_TAGS and _CUE_EXCITED.search(seg) and not _CUE_SAD.search(seg):
+        # "đừng bỏ lỡ" / "kẻo lỡ" la loi MOI MUA, khong phai tiec nuoi
+        sad = _CUE_SAD.search(re.sub(r"(?i)(đừng|kẻo|chớ)\s+(bỏ\s+)?lỡ", "", seg))
+        if tag in _CALM_TAGS and _CUE_EXCITED.search(seg) and not sad:
             parts[i] = "[ngạc nhiên]" if re.search(r"\?|tin được|thật (sao|á)|hả|không thể tin", seg) else "[hào hứng]"
-        elif (tag in _HAPPY_TAGS or tag == "nghi ngo") and _CUE_SAD.search(seg) and "!" not in seg:
+        elif (tag in _HAPPY_TAGS or tag == "nghi ngo") and sad and "!" not in seg:
             parts[i] = "[buồn]"
+        elif tag in _FLAT_TAGS and _CUE_CTA.search(seg) and not sad:
+            # cau CHOT DON / moi mua ma gan [nghiêm túc] / [dịu dàng]... -> nghe chan, het hon
+            parts[i] = "[gấp gáp]" if _CUE_URGENT.search(seg) else "[hào hứng]"
+    # cau hoi MO DAU khong co the (quang cao hay mo bang cau hoi goi to mo) -> [tinh nghịch]
+    head = (parts[0] or "").strip()
+    first = re.split(r"(?<=[.!?…])\s+", head)[0] if head else ""
+    if first.endswith("?") and re.search(r"(?i)\b(bạn|anh chị|các bạn|mọi người|you)\b", first):
+        parts[0] = re.sub(r"^(\s*)", r"\1[tinh nghịch] ", parts[0], count=1)
     return "".join(parts)
 
 
