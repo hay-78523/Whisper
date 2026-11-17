@@ -805,8 +805,42 @@ def _make_ai_call(translate, rep):
     return call
 
 
+# ---- soat lai the AI gan: model nho (qwen2.5 3B) doi khi gan NGUOC nghia ----
+# (do: "Anh em ơi, tin được không!" -> [dịu dàng]; "Tiếc là hôm qua mình lỡ..." -> [nghi ngờ])
+_CUE_EXCITED = re.compile(r"(?i)(trời ơi|ôi trời|wow|tin được không|không thể tin|thật sao|thật á|"
+                          r"hả\?|á à|quá đã|tuyệt vời|đỉnh (quá|thật)|mua ngay|chốt đơn|ơi[,!]|!\s*$)")
+_CUE_SAD = re.compile(r"(?i)(tiếc là|đáng tiếc|tiếc quá|lỡ mất|bỏ lỡ|buồn|thất vọng|đau lòng|nhớ (ai|mẹ|"
+                      r"ba|bố|em|anh|người)|không còn nữa|ra đi|mất đi|cô đơn|nước mắt)")
+_CALM_TAGS = {"diu dang", "buon", "thi tham", "bi an", "met moi", "nghi ngo", "lanh lung", "binh tinh",
+              "tram ngam", "that vong", "nung niu", "buon ngu", "ngai ngung"}
+_HAPPY_TAGS = {"vui", "hao hung", "ngac nhien", "tu hao", "het", "quang cao", "tinh nghich", "tu tin",
+               "kich tinh", "gap gap"}
+
+
+def _fix_obvious_tags(text):
+    """The cam xuc AI gan TRAI NGUOC dau hieu ro trong cau -> sua: cau than / hoi bat ngo ma gan
+    [dịu dàng]/[nghi ngờ]... -> [ngạc nhiên] hoac [hào hứng]; cau tiec nuoi / buon ma gan the vui
+    hoac [nghi ngờ] -> [buồn]. Chi sua khi trai nguoc ro, con lai giu nguyen y AI."""
+    parts = re.split(r"(\[[^\]\n]{1,30}\])", text or "")
+    for i in range(1, len(parts) - 1, 2):
+        tag = _norm_tag(parts[i][1:-1])
+        body = parts[i + 1]
+        seg = re.split(r"(?<=[.!?…])\s+", body.strip())[0] if body.strip() else ""
+        if not seg:
+            continue
+        if tag in _CALM_TAGS and _CUE_EXCITED.search(seg) and not _CUE_SAD.search(seg):
+            parts[i] = "[ngạc nhiên]" if re.search(r"\?|tin được|thật (sao|á)|hả|không thể tin", seg) else "[hào hứng]"
+        elif (tag in _HAPPY_TAGS or tag == "nghi ngo") and _CUE_SAD.search(seg) and "!" not in seg:
+            parts[i] = "[buồn]"
+    return "".join(parts)
+
+
 def _annotate_one(chunk, target, call, ctx=""):
     """Bien kich 1 phan bang AI. Loi -> nem (AIError / ValueError)."""
+    return _fix_obvious_tags(_annotate_one_raw(chunk, target, call, ctx))
+
+
+def _annotate_one_raw(chunk, target, call, ctx=""):
     if not target:                       # duong TOC HANH: chi gan the, khong viet lai
         try:
             return _sanitize_script(_annotate_chunk_fast(chunk, call, ctx))
