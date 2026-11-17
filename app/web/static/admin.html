@@ -159,12 +159,14 @@
          style="display:none;font-size:11px;white-space:pre-wrap;margin:6px 0 0"></pre>
 
     <div class="formrow" style="margin-top:12px">
-      <span class="muted" style="font-size:12px">Engine giọng Anh</span>
+      <span class="muted" style="font-size:12px">Engine giọng clone</span>
       <select id="cl_engine" class="inp">
-        <option value="">tự động (Chatterbox khi có GPU)</option>
+        <option value="" id="cl_eng_auto">tự động (Chatterbox khi có GPU)</option>
         <option value="chatterbox">Chatterbox — tự nhiên, có cảm xúc</option>
         <option value="f5">F5 — nhanh, giống âm sắc</option>
+        <option value="voxcpm" id="cl_eng_vox" hidden>VoxCPM2 — thử nghiệm (Anh + Việt, cảm xúc từ mẫu thật)</option>
       </select>
+      <span class="muted" id="cl_vox_note" style="font-size:12px;display:none"></span>
       <span class="muted" style="font-size:12px">Chất lượng</span>
       <select id="cl_quality" class="inp">
         <option value="">theo mặc định</option>
@@ -631,6 +633,7 @@
         sb.disabled = !CL.canAddVoice || !!CL.stylesJob;
         var all = d.profiles || [];
         renderCloneStatus(d);
+        renderVoxNote(d);
         renderCloneProfiles(all.filter(function (p) { return p.approval !== 'pending'; }));
         renderPendingVoices(all.filter(function (p) { return p.approval === 'pending'; }));
         if (!CL.settingsLoaded) { fillCloneSettings(d); CL.settingsLoaded = true; }
@@ -682,6 +685,25 @@
     if (!CL.installJob && d.log && d.log.length) {
       log.style.display = 'block';
       log.textContent = d.log.join('\n');
+    }
+  }
+
+  function renderVoxNote(d) {
+    var vox = d.vox || {};
+    if (vox.offer) {
+      document.getElementById('cl_eng_vox').hidden = false;
+      if (vox['default'] === 'voxcpm')
+        document.getElementById('cl_eng_auto').textContent = 'mặc định bản test (VoxCPM2)';
+    }
+    var vn = document.getElementById('cl_vox_note');
+    vn.style.display = 'none';
+    if (vox.offer && !vox.ready) {
+      vn.style.display = '';
+      vn.textContent = vox.model ? 'VoxCPM2: có model nhưng Python engine chưa có thư viện — chạy Cai-VoxCPM2.bat'
+        : 'VoxCPM2 chưa cài — chạy Cai-VoxCPM2.bat (tải ~5GB), đang dùng Chatterbox/F5';
+    } else if (vox.active) {
+      vn.style.display = '';
+      vn.textContent = 'Đang đọc bằng VoxCPM2 (cả giọng Anh + Việt)';
     }
   }
 

@@ -32,6 +32,7 @@ data/ollama_models/
 
 # model nang + du lieu thu nghiem (khong dua vao git)
 models_chatterbox/
+models_voxcpm2/
 Claude outputs/
 so_sanh_elevenlabs/
 :memory:*

@@ -123,6 +123,14 @@ CLONE_RETRY = 1              # so lan doc lai RIENG nhung doan bi loi (khong bo 
 CLONE_BATCH_ITEMS = 6        # so doan gui worker moi lan (van ban dai 30-40k ky tu duoc chia lo)
 CLONE_FAIL_RATIO = 0.35      # loi vuot ti le nay moi bao that bai ca job
 
+# --- Engine giong clone ---
+# auto = Chatterbox (giong Anh, may GPU) / F5 (giong Viet). "voxcpm" = VoxCPM2 cho CA Anh + Viet:
+# ban test dat san qua edition.json "clone_engine"; /admin doi lai duoc de nghe A/B.
+CLONE_ENGINE = EDITION.get("clone_engine") or "auto"
+VOX_CFG = 2.0                # do bam mau giong / kich ban cua VoxCPM2 (mac dinh cua hang)
+VOX_STEPS = 10               # so buoc khuech tan (10 = mac dinh hang; 16 min hon, cham hon)
+VOX_MAX_CHARS = 220          # doan dai nhat moi lan doc
+
 # --- Hau ky am thanh (chay trong tien trinh chinh, thuan Python) ---
 CLONE_POST_TRIM = True       # cat im lang dau/cuoi tung doan -> khop timestamp
 CLONE_POST_NORMALIZE = True  # can bang am luong moi doan (het to nho that thuong)

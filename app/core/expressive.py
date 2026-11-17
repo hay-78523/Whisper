@@ -2184,13 +2184,16 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         text = normalize_numbers_en(text)
     else:
         text = normalize_numbers_vi(text)
-    use_cbx = english and clone.engine_for(True) == "chatterbox"
-    if use_cbx:
-        # Chatterbox khong nhan chu that duoc; giu *...* thi cau bi cat giua cum
+    eng = clone.engine_for(english)
+    use_cbx = english and eng == "chatterbox"
+    use_vox = eng == "voxcpm"                 # VoxCPM2: ca Anh + Viet, cung khong nhan toc do
+    if use_cbx or use_vox:
+        # Chatterbox/VoxCPM2 khong nhan chu that duoc; giu *...* thi cau bi cat giua cum
         # ("...Auto Brew system | will heat") -> bo dau nhan, chi ngat o dau cau / dau phay
         text = re.sub(r"\*([^*\n]{1,80})\*", r"\1", text)
     # Chatterbox: doan ~200 ky tu (1-2 cau) — doan dai hon de doc lech / nuot cum tu
     segs = clone_segments(text, int(clone._cfg("CBX_MAX_CHARS", 200)) if use_cbx
+                          else int(clone._cfg("VOX_MAX_CHARS", 220)) if use_vox
                           else _voice_max_chars(name, english=english))
     try:
         have_styles = clone.available_styles(name)
@@ -2298,8 +2301,8 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         gain = max(-4.0, min(hi, gain * 0.4 * k_emo)) + float(gp.get("gain") or 0.0)
         gain += float(s.get("gain") or 0)
         extra = [_CLONE_FX_FILTER.get(s.get("fx") or "")]
-        if use_cbx:
-            # Chatterbox KHONG nhan toc do -> co gian tung cau (giu cao do): cau buon cham,
+        if use_cbx or use_vox:
+            # Chatterbox / VoxCPM2 KHONG nhan toc do -> co gian tung cau (giu cao do): cau buon cham,
             # cau hao hung nhanh, va o "Toc do" cham/nhanh cung co tac dung
             # Chatterbox da tu doc nhanh khi hao hung -> chi duoc LAM CHAM (buon / o Toc do cham)
             tempo = clone._rate_to_speed(base_rate) * min(1.0, _sp)

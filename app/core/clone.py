@@ -78,7 +78,7 @@ _DEFAULT_SETTINGS = {
     "trim": None,           # cat im lang dau/cuoi
     "lowercase": None,      # ha chu thuong truoc khi doc (model ViVoice)
     "denoise_ref": None,    # loc on mau giong
-    "engine": None,         # auto | chatterbox | f5  (giong clone tieng Anh)
+    "engine": None,         # auto | chatterbox | f5 | voxcpm (voxcpm: ca Anh + Viet)
 }
 
 
@@ -91,11 +91,52 @@ def cbx_ready():
     return False
 
 
+# VoxCPM2 (Apache-2.0, ca Anh + Viet): ban test dat san trong edition.json "clone_engine".
+# Cai bang setup_voxcpm.py / Cai-VoxCPM2.bat (thu vien voxcpm + model ~5GB vao models_voxcpm2).
+VOX_DIR = ROOT / "models_voxcpm2"
+VOX_FILES = ("model.safetensors", "audiovae.pth", "config.json", "tokenizer.json")
+_vox_cache = {"py": None, "ok": False, "at": 0.0}
+
+
+def vox_model_ready():
+    return all((VOX_DIR / f).exists() for f in VOX_FILES)
+
+
+def vox_ready(recheck=False):
+    """Co model VoxCPM2 + Python engine import duoc thu vien voxcpm (kiem tra 1 lan / 10 phut)."""
+    if not vox_model_ready():
+        return False
+    py, _err = engine_python()
+    if not py:
+        return False
+    ttl = 600 if _vox_cache["ok"] else 30     # vua cai xong -> nhan ra trong ~30 giay
+    if not recheck and _vox_cache["py"] == py and time.time() - _vox_cache["at"] < ttl:
+        return _vox_cache["ok"]
+    try:
+        r = subprocess.run([py, "-c", "import voxcpm"], capture_output=True, text=True, timeout=300)
+        ok = r.returncode == 0
+    except Exception:
+        ok = False
+    _vox_cache.update(py=py, ok=ok, at=time.time())
+    return ok
+
+
+def _want_engine():
+    return (get_settings().get("engine") or _cfg("CLONE_ENGINE", "auto") or "auto").lower()
+
+
 def engine_for(english=True):
+    """'voxcpm' (Anh + Viet) khi da chon va da cai; con lai theo _base_engine_for."""
+    if _want_engine() == "voxcpm" and vox_ready():
+        return "voxcpm"
+    return _base_engine_for(english)
+
+
+def _base_engine_for(english=True):
     """'chatterbox' (tu nhien, co muc cam xuc) cho tieng Anh khi co model; con lai F5."""
     if not english:
         return "f5"
-    want = (get_settings().get("engine") or _cfg("CLONE_ENGINE", "auto") or "auto").lower()
+    want = _want_engine()
     if want == "f5" or not cbx_ready():
         return "f5"
     if want == "chatterbox":
@@ -252,6 +293,9 @@ def status(recheck=False):
         "profiles": [profile_info(p) for p in list_profiles(include_pending=True)],
         "ready": bool(py) and all(a["ok"] for a in assets),
         "can_make_styles": can_make_styles(),
+        "vox": {"model": vox_model_ready(), "ready": vox_ready(recheck=recheck),
+                "offer": _cfg("CLONE_ENGINE", "auto") == "voxcpm" or vox_model_ready(),
+                "active": engine_for(True) == "voxcpm", "default": _cfg("CLONE_ENGINE", "auto")},
         "log": log_tail(12),
     }
 
@@ -726,7 +770,7 @@ STYLE_GEN_PARAMS = {"hype": (0.95, 0.3), "calm": (0.3, 0.5),        # (exaggerat
 
 def can_make_styles():
     """Can Chatterbox (model + thu vien) va dang dung GPU."""
-    return cbx_ready() and engine_for(True) == "chatterbox"
+    return cbx_ready() and _base_engine_for(True) == "chatterbox"
 
 
 def _clean_style_wav(wav_bytes, out):
@@ -815,7 +859,9 @@ def make_emotion_styles(name, force=False, tries=3, say=None):
         auto = dict(m.get("styles_auto") or {})
         auto.update({k: report[k]["sim"] for k in made})
         meth = {k: v for k, v in (m.get("styles_method") or {}).items() if k not in made}
-        _save_meta(name, styles=sorted(available_styles(name)), styles_auto=auto, styles_method=meth)
+        synth = sorted(set(m.get("styles_synth") or []) | set(made))
+        _save_meta(name, styles=sorted(available_styles(name)), styles_auto=auto, styles_method=meth,
+                   styles_synth=synth)
     return report
 
 
@@ -1780,6 +1826,8 @@ def _stall_limit(payload):
     """So giay toi da cho 1 doan moi (khong co doan moi = treo). CPU cham hon -> cho gap doi."""
     base = float(_cfg("CLONE_STALL_SEC", 300))
     dev = (payload.get("device") or payload.get("prefer_device") or "").lower()
+    if payload.get("engine") == "voxcpm" and not gpu_ready():
+        base *= 3                          # VoxCPM2 2B tren Mac/CPU: 1 cau dai co the > 5 phut
     return base * (2 if dev == "cpu" else 1)
 
 
@@ -1839,6 +1887,22 @@ def available_styles(name):
     d = profile_dir(safe_name(name)) / "styles"
     return {s for s in STYLE_NAMES
             if (d / s / "ref.wav").exists() and (d / s / "ref.txt").exists()}
+
+
+def synthetic_styles(name):
+    """Mau cam xuc KHONG phai giong that: Chatterbox doc (styles_synth / cau mau STYLE_TEXTS_EN)
+    hoac bien doi cao do (bien_doi). VoxCPM2 noi tiep mau -> dung mau nay la chep luon chat AI."""
+    m = profile_meta(safe_name(name))
+    out = set(m.get("styles_synth") or [])
+    out |= {k for k, v in (m.get("styles_method") or {}).items() if v == "bien_doi"}
+    d = profile_dir(safe_name(name)) / "styles"
+    for sty, text in STYLE_TEXTS_EN.items():
+        try:
+            if (d / sty / "ref.txt").read_text(encoding="utf-8").strip() == text.strip():
+                out.add(sty)
+        except OSError:
+            pass
+    return out
 
 
 def style_ref(name, style):
@@ -1907,9 +1971,12 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
         plan = [(t, round(max(0.3, min(2.0, sp * float(speeds[i] if i < len(speeds) else 1.0))), 3))
                 for i, (t, sp) in enumerate(plan)]
     need_vi = _is_vietnamese(" ".join(t for t, _s in plan))
+    engine = engine or engine_for(not need_vi)
     # mau "tong giong" rieng (styles/hype, styles/calm) neu giong co: cam xuc den tu
     # CHINH giong do noi hao hung / tram -> khong phai bop meo am thanh sau khi doc
     avail = available_styles(name)
+    if engine == "voxcpm":
+        avail -= synthetic_styles(name)    # chi mau cat tu giong that / nguoi dung tai len
     sfac = {k: (1.0 if need_vi else style_speed(name, k)) for k in avail}
     items = []
     for i, (t, sp) in enumerate(plan):
@@ -1927,8 +1994,7 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
     if not items:
         return [b""] * n
 
-    engine = engine or engine_for(not need_vi)
-    if need_vi and not assets_ready():
+    if need_vi and engine != "voxcpm" and not assets_ready():
         bad = "; ".join("%s: %s" % (a["label"], a["problem"])
                         for a in clone_assets.state() if not a["ok"])
         raise RuntimeError("Thiếu dữ liệu giọng Việt (%s).\nVào /admin bấm "
@@ -1963,13 +2029,16 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
             "target_rms": float(_cfg("CLONE_TARGET_RMS", 0.1)),
             "seed": int(_cfg("CLONE_SEED", -1)),
             # chu thuong chi danh cho model ViVoice; tieng Anh giu nguyen hoa/thuong
-            "lowercase": need_vi and bool(_opt("lowercase", "CLONE_LOWERCASE", True)),
+            "lowercase": need_vi and engine != "voxcpm" and bool(_opt("lowercase", "CLONE_LOWERCASE", True)),
             "remove_silence": False,
             "engine": engine,
             # do tren Ray: cfg 0.3 + cam xuc 0.7 -> dung 100% chu, nhip = ElevenLabs
             "cbx_cfg": float(_cfg("CBX_CFG_WEIGHT", 0.3)),
             "cbx_temp": float(_cfg("CBX_TEMPERATURE", 0.8)),
             "exaggeration": float(_cfg("CBX_EXAGGERATION", 0.65)),
+            "vox_dir": str(VOX_DIR.absolute()),
+            "vox_cfg": float(_cfg("VOX_CFG", 2.0)),
+            "vox_steps": int(_cfg("VOX_STEPS", 10)),
             "prefer_device": st.get("device") or _cfg("CLONE_DEVICE", "auto"),
             "device": (st.get("device") if st.get("device") in ("cpu", "cuda", "mps")
                        else None),

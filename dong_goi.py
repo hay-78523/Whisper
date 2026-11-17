@@ -64,7 +64,7 @@ def plan(name, ed, tmp):
     repl = {}
     excl = tuple(ed.get("exclude") or ())         # file/thu muc ban nay KHONG kem (vd model giong Anh)
     walk(ROOT / "app", "app/", repl)
-    for f in TOP_FILES:
+    for f in TOP_FILES + list(ed.get("extra_files") or ()):   # extra_files: file chi ban nay co
         if (ROOT / f).is_file() and not (excl and f.startswith(excl)):
             repl[f] = ROOT / f
     walk(ROOT / "editions" / name, "editions/%s/" % name, repl)
@@ -187,7 +187,8 @@ def make_va():
     import time
     repl = {}
     walk(ROOT / "app", "app/", repl)
-    for f in TOP_FILES:
+    extra = [f for ed in editions() for f in (load(ed).get("extra_files") or ())]
+    for f in TOP_FILES + extra:
         if (ROOT / f).is_file():
             repl[f] = ROOT / f
     for ed in editions():                      # cau hinh tung ban (vd hien du giong), khong co ACTIVE

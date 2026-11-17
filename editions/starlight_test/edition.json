@@ -33,5 +33,10 @@
     "brittney",
     "ray"
   ],
-  "mo_ta": "Ban TEST CHUC NANG Starlight: nhu ban doanh nghiep, it giong (3) de test nhanh tren GPU."
+  "mo_ta": "Ban TEST CHUC NANG Starlight: nhu ban doanh nghiep, it giong (3) de test nhanh tren GPU. Giong clone doc bang VoxCPM2 (thu nghiem, ca Anh + Viet) sau khi chay Cai-VoxCPM2.bat; /admin doi lai Chatterbox/F5 de nghe A/B.",
+  "clone_engine": "voxcpm",
+  "extra_files": [
+    "setup_voxcpm.py",
+    "Cai-VoxCPM2.bat"
+  ]
 }

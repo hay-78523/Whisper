@@ -679,6 +679,87 @@ def _infer_cbx(model, req, it, text, out_path):
     os.replace(tmp, out_path)
 
 
+# ------------------------------------------------------- VoxCPM2 (Anh + Viet, ban test)
+
+class VOX:
+    model = None
+    device = None
+    path = None
+
+
+def get_vox(path, device):
+    if VOX.model is not None and VOX.device == device and VOX.path == path:
+        return VOX.model
+    if not path or not (Path(path) / "model.safetensors").exists():
+        raise RuntimeError("Thieu model VoxCPM2 (thu muc models_voxcpm2) — chay Cai-VoxCPM2.bat")
+    # MPS: thu vien tu doi bf16 -> fp32 (gap doi RAM: may 16GB bi swap, cham ~40 lan) -> giu bf16
+    os.environ.setdefault("VOXCPM_MPS_DTYPE", "bfloat16")
+    from voxcpm import VoxCPM
+    log("Nap VoxCPM2 tu %s tren %s ..." % (path, device))
+    t = time.time()
+    # optimize=False: torch.compile tren Windows can triton -> bo
+    VOX.model = VoxCPM.from_pretrained(str(path), load_denoiser=False, optimize=False, device=device)
+    VOX.device, VOX.path = device, path
+    log("VoxCPM2 san sang (%.1fs)" % (time.time() - t))
+    return VOX.model
+
+
+def _infer_vox(model, req, text, out_path):
+    """Che do 'ultimate': mau giong (cau co the cam xuc -> MAU CAM XUC cua chinh giong do)
+    vua la ref am sac vua la doan mo dau de model noi tiep -> cam xuc + nhip lay tu giong that.
+    Khong dung chi dan bang loi "(sad, slow)": do thu lam giong lech con 0.78-0.88."""
+    import numpy as np
+    import soundfile as sf
+    ref = req["ref_audio"]
+    ref_txt = (req.get("ref_text") or "").strip()
+    kw = {"reference_wav_path": ref, "cfg_value": float(req.get("vox_cfg") or 2.0),
+          "inference_timesteps": int(req.get("vox_steps") or 10)}
+    if ref_txt:
+        kw.update(prompt_wav_path=ref, prompt_text=ref_txt)
+    seed = req.get("seed")
+    if seed is not None and int(seed) >= 0:
+        import torch
+        torch.manual_seed(int(seed))
+    wav = np.asarray(model.generate(text=text, **kw), dtype=np.float32)
+    sr = int(model.tts_model.sample_rate)
+    if sr != 24000:                         # ca app dung 24 kHz (ghep clip, hau ky)
+        import librosa
+        wav = librosa.resample(wav, orig_sr=sr, target_sr=24000)
+    tmp = out_path.with_name("tmp_" + out_path.name)
+    sf.write(str(tmp), np.clip(wav, -1.0, 1.0), 24000, subtype="PCM_16")
+    if not tmp.exists() or tmp.stat().st_size < 200:
+        raise RuntimeError("file rong")
+    os.replace(tmp, out_path)
+
+
+def _free_other_models(keep):
+    """GPU 8GB khong chua noi VoxCPM2 (~5GB) cung Chatterbox/F5 -> doi engine thi tha model kia."""
+    freed = False
+    if keep != "voxcpm" and VOX.model is not None:
+        VOX.model, VOX.device, VOX.path = None, None, None
+        freed = True
+    if keep == "voxcpm":
+        if CBX.model is not None:
+            CBX.model, CBX.ref = None, None
+            freed = True
+        if State.tts is not None:
+            State.tts, State.ckpt = None, None
+            freed = True
+    if not freed:
+        return
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+    except Exception:
+        pass
+    log("Doi engine -> %s: da tha model cu khoi bo nho." % keep)
+
+
 def handle_infer(req):
     t0 = time.time()
     out_dir = Path(req["out_dir"])
@@ -691,7 +772,12 @@ def handle_infer(req):
 
     device = req.get("device") or detect_device(req.get("prefer_device", "auto"))
     use_cbx = req.get("engine") == "chatterbox"
-    if use_cbx:
+    use_vox = req.get("engine") == "voxcpm"
+    _free_other_models("voxcpm" if use_vox else "chatterbox" if use_cbx else "f5")
+    if use_vox:
+        tts = get_vox(req.get("vox_dir") or "", device)
+        lower = False
+    elif use_cbx:
         tts = get_cbx(device if device in ("cuda", "cpu") else "cpu")
         lower = False
     else:
@@ -707,7 +793,9 @@ def handle_infer(req):
             continue                        # doan trong: de tien trinh chinh giu im lang
         gen = text.lower() if lower else text
         try:
-            if use_cbx:
+            if use_vox:
+                _infer_vox(tts, req, gen, out)
+            elif use_cbx:
                 _infer_cbx(tts, req, it, gen, out)
             else:
                 _infer_one(tts, req, gen, it.get("speed", 1.0), out)
@@ -723,7 +811,8 @@ def handle_infer(req):
                     torch.cuda.empty_cache()
                 except Exception:
                     pass
-    return {"ok": True, "device": CBX.device if use_cbx else State.device, "written": written,
+    dev = VOX.device if use_vox else CBX.device if use_cbx else State.device
+    return {"ok": True, "device": dev, "written": written,
             "failed": failed, "elapsed": round(time.time() - t0, 2)}
 
 
