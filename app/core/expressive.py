@@ -2358,6 +2358,16 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     texts = [t for _k, t, _s in items]
     speeds = [sp for _k, _t, sp in items]
     vox_ctl = [_VOX_EMO.get(_emo_name(segs[k]), "") for k, _t, _s in items] if use_vox else None
+    # VoxCPM2 + do cam xuc Manh / Rat manh: cau co the doc bang chi dan bang loi (do tren voice_nu:
+    # nhan nha 3.17 -> 3.90, cao do 9.4 -> 10.5; doi lai khop chu 98% -> 93%, cau sai thi doc lai
+    # bang mau giong cho ro chu)
+    vox_force = bool(use_vox and k_emo >= 1.3)
+    if vox_force and vox_ctl:
+        calm = {"buon", "that vong", "tram ngam", "binh tinh", "diu dang", "nung niu", "met moi",
+                "thi tham", "lang man", "bi an", "lanh lung", "ke chuyen", "nghen ngao", "lo lang"}
+        vox_ctl = [(c + (", deeply emotional, expressive pauses" if _emo_name(segs[k]) in calm
+                         else ", strong emphasis, lively ups and downs")) if c else c
+                   for c, (k, _t, _s) in zip(vox_ctl, items)]
 
     def run(idx, prog=None, calm_down=0):
         pick = lambda L: [L[i] for i in idx] if L else None
@@ -2369,7 +2379,8 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
             c2 = [round(min(0.7, x + 0.15 * calm_down), 3) for x in c2]
         return clone.synth_cues_clone(pick(texts), name, rate=base_rate, progress=prog,
                                       speeds=pick(speeds), styles=pick(styles),
-                                      exaggerations=e2, cfgs=c2, vox_styles=pick(vox_ctl))
+                                      exaggerations=e2, cfgs=c2, vox_styles=pick(vox_ctl),
+                                      vox_force=vox_force and not calm_down)
     clips = run(list(range(len(items))), progress)
     # TU KIEM TRA: Whisper nghe lai tung doan; doan doc lech (nuot / doc sai chu) -> doc lai,
     # giu ban khop chu nhat. Tat: CLONE_VERIFY = False.
