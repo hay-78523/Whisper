@@ -81,8 +81,8 @@
     hs[k].insertBefore(idx, hs[k].firstChild);
   }
 
-  // 6. chu ky o chan trang
-  if (!document.querySelector('.splash-content')) {
+  // 6. chu ky o chan trang (edition.json "footer": false = an)
+  if (E.footer !== false && !document.querySelector('.splash-content')) {
     var ft = el('div', 'sl-footer',
       '<span><b>' + esc(E.name || 'Starlight Voice Studio') + '</b> · ' + esc(E.owner || 'Starlight Entertainment Center') + '</span>' +
       '<span>' + esc(E.creditLabel || 'Designed & built by') + ' <span class="nx">' + esc(E.credit || 'NEXUS') + '</span></span>');

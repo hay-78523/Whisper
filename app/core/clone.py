@@ -1945,7 +1945,7 @@ def style_speed(name, style):
 
 
 def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=None,
-                     styles=None, exaggerations=None, cfgs=None, engine=None):
+                     styles=None, exaggerations=None, cfgs=None, engine=None, vox_styles=None):
     """Doc tung doan bang giong nhan ban. Tra ve list bytes wav DUNG so doan.
 
     Doan trong -> b"" (giu im lang dung cho). Doan loi -> doc lai rieng, con loi
@@ -1990,6 +1990,8 @@ def synth_cues_clone(texts, voice_id, rate=1.0, progress=None, log=None, speeds=
             it["exaggeration"] = float(exaggerations[i])
         if cfgs and i < len(cfgs) and cfgs[i]:
             it["cfg"] = float(cfgs[i])          # Chatterbox: do bam nhip rieng tung cam xuc
+        if engine == "voxcpm" and not sty and vox_styles and i < len(vox_styles) and vox_styles[i]:
+            it["vox_style"] = vox_styles[i]     # khong co mau cam xuc THAT -> chi dan bang loi
         items.append(it)
     if not items:
         return [b""] * n

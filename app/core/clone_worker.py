@@ -704,7 +704,7 @@ def get_vox(path, device):
     return VOX.model
 
 
-def _infer_vox(model, req, text, out_path):
+def _infer_vox(model, req, text, out_path, style=""):
     """Che do 'ultimate': mau giong (cau co the cam xuc -> MAU CAM XUC cua chinh giong do)
     vua la ref am sac vua la doan mo dau de model noi tiep -> cam xuc + nhip lay tu giong that.
     Khong dung chi dan bang loi "(sad, slow)": do thu lam giong lech con 0.78-0.88."""
@@ -714,7 +714,11 @@ def _infer_vox(model, req, text, out_path):
     ref_txt = (req.get("ref_text") or "").strip()
     kw = {"reference_wav_path": ref, "cfg_value": float(req.get("vox_cfg") or 2.0),
           "inference_timesteps": int(req.get("vox_steps") or 10)}
-    if ref_txt:
+    if style:
+        # cau co the cam xuc ma giong khong co mau cam xuc that: chi dan "(mo ta)" + chi ref am sac
+        # (che do noi tiep mau se bam theo nhip mau trung tinh -> mat cam xuc)
+        text = "(%s)%s" % (style, text)
+    elif ref_txt:
         kw.update(prompt_wav_path=ref, prompt_text=ref_txt)
     seed = req.get("seed")
     if seed is not None and int(seed) >= 0:
@@ -794,7 +798,7 @@ def handle_infer(req):
         gen = text.lower() if lower else text
         try:
             if use_vox:
-                _infer_vox(tts, req, gen, out)
+                _infer_vox(tts, req, gen, out, it.get("vox_style") or "")
             elif use_cbx:
                 _infer_cbx(tts, req, it, gen, out)
             else:

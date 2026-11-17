@@ -33,5 +33,6 @@
     "models_chatterbox/",
     "Tao-Mau-Cam-Xuc.bat",
     "tao_mau_cam_xuc.py"
-  ]
+  ],
+  "footer": false
 }

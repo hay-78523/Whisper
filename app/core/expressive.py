@@ -1152,6 +1152,25 @@ _CBX_EMO = {
 }
 
 
+# VoxCPM2: cau co the cam xuc nhung giong KHONG co mau cam xuc THAT -> chi dan bang loi
+# "(mo ta)" dau cau (model hieu tieng Anh). Do thu: giong Viet van giong ~0.90.
+_VOX_EMO = {
+    "het": "shouting loudly, very intense", "gian du": "angry, forceful, tense",
+    "hao hung": "very excited, energetic, enthusiastic", "kich tinh": "dramatic, intense",
+    "gap gap": "urgent, fast, tense", "ngac nhien": "surprised, amazed, disbelief",
+    "quang cao": "energetic advertising tone, upbeat", "vui": "happy, cheerful, smiling",
+    "tinh nghich": "playful, teasing", "tu tin": "confident, clear, firm",
+    "tu hao": "proud, confident", "so hai": "scared, trembling, nervous",
+    "lo lang": "worried, anxious", "nghen ngao": "choked up, emotional, holding back tears",
+    "nghiem tuc": "serious, firm, clear", "ke chuyen": "calm storytelling",
+    "lanh lung": "cold, flat, detached", "bi an": "mysterious, low and slow",
+    "buon": "sad, slow, heavy-hearted", "that vong": "disappointed, low",
+    "tram ngam": "thoughtful, slow, low voice", "binh tinh": "calm, relaxed",
+    "diu dang": "gentle, warm, soft", "nung niu": "sweet, tender, affectionate",
+    "met moi": "tired, weary, slow", "thi tham": "whispering, soft and breathy",
+    "lang man": "romantic, soft, warm",
+}
+
 # GIONG DIEU THEO THE LOAI VIDEO: tong nen (cau khong gan the doc theo tong nay),
 # toc do, do ngat nghi giua cau, do bieu cam them cho Chatterbox.
 # "goi_y" dua cho AI bien kich biet the loai can gan the ra sao.
@@ -2252,6 +2271,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         cfgs = [round(max(0.2, p[1] - 0.05 * max(0.0, k_emo - 1.0) / 0.35), 3) for p in pr]
     texts = [t for _k, t, _s in items]
     speeds = [sp for _k, _t, sp in items]
+    vox_ctl = [_VOX_EMO.get(_emo_name(segs[k]), "") for k, _t, _s in items] if use_vox else None
 
     def run(idx, prog=None, calm_down=0):
         pick = lambda L: [L[i] for i in idx] if L else None
@@ -2263,7 +2283,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
             c2 = [round(min(0.7, x + 0.15 * calm_down), 3) for x in c2]
         return clone.synth_cues_clone(pick(texts), name, rate=base_rate, progress=prog,
                                       speeds=pick(speeds), styles=pick(styles),
-                                      exaggerations=e2, cfgs=c2)
+                                      exaggerations=e2, cfgs=c2, vox_styles=pick(vox_ctl))
     clips = run(list(range(len(items))), progress)
     # TU KIEM TRA: Whisper nghe lai tung doan; doan doc lech (nuot / doc sai chu) -> doc lai,
     # giu ban khop chu nhat. Tat: CLONE_VERIFY = False.

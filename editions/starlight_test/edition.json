@@ -40,5 +40,6 @@
   "extra_files": [
     "setup_voxcpm.py",
     "Cai-VoxCPM2.bat"
-  ]
+  ],
+  "footer": false
 }
