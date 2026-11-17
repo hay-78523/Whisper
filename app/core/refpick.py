@@ -83,18 +83,24 @@ def _join_words_natural(ws):
     return "".join(parts).strip()
 
 
-def _windows(words, dur_total, min_sec=4.8, max_sec=10.5, min_conf=0.52):
-    """Cac doan bat dau dau cau, ket thuc cuoi cau (co khoang ngat thuc >= 0.22s), dai min..max giay."""
+def _windows(words, dur_total, min_sec=4.8, max_sec=10.5, min_conf=0.52, loose=False):
+    """Cac doan bat dau dau cau, ket thuc cuoi cau (co khoang ngat thuc >= 0.22s), dai min..max giay.
+    loose=True (giong quang cao doc nhanh, Whisper gan nhu khong cham cau): ranh gioi ca o dau
+    phay / cho ngat >= 0.30s."""
     W = [w for w in words if (w.get("text") or "").strip()]
     if not W:
         return []
+    gap_after = lambda i: float(W[i + 1]["start"]) - float(W[i]["end"])
     ends = {
         i for i, w in enumerate(W)
         if i == len(W) - 1 or (
             w["text"].strip()[-1:] in ".?!…"
-            and float(W[i + 1]["start"]) - float(w["end"]) >= 0.22
+            and gap_after(i) >= 0.22
         )
     }
+    if loose:
+        ends |= {i for i in range(len(W) - 1)
+                 if (W[i]["text"].strip()[-1:] in ",;:" and gap_after(i) >= 0.12) or gap_after(i) > 0.30}
     if len(ends) < 2:                              # Whisper khong cham cau -> dung cho ngat > 0.30s
         ends = {i for i in range(len(W) - 1) if W[i + 1]["start"] - W[i]["end"] > 0.30}
         ends.add(len(W) - 1)
@@ -120,7 +126,7 @@ def _windows(words, dur_total, min_sec=4.8, max_sec=10.5, min_conf=0.52):
                 continue
             raw_text = _join_words_natural(ws)
             text = _clean_win_text(raw_text)
-            if not text:
+            if not text or re.search(r"[+@&/#=]", text):   # ky hieu (SPF 50+) F5 khong doc duoc
                 continue
             n_words = len(re.findall(r"\w+", text))
             speech_dur = sum(max(0.04, w["end"] - w["start"]) for w in ws)
@@ -145,6 +151,9 @@ def pick(src_path, words, want_styles=True):
         wins = _windows(words, total, min_sec=4.5, max_sec=11.5, min_conf=0.35)
     if not wins and total >= 4.0:
         wins = _windows(words, total, min_sec=4.0, max_sec=12.0, min_conf=0.30)
+    if not wins:                                   # doc nhanh, it dau cham: cat o dau phay / cho ngat
+        wins = (_windows(words, total, min_sec=4.8, max_sec=10.5, min_conf=0.35, loose=True)
+                or _windows(words, total, min_sec=4.0, max_sec=12.0, min_conf=0.30, loose=True))
     if not wins:
         return None
     f0, db = _f0_track(y)

@@ -181,6 +181,12 @@
         <option value="mps">Apple MPS</option>
         <option value="cpu">CPU</option>
       </select>
+      <span class="muted" style="font-size:12px">Tách nhạc nền mẫu</span>
+      <select id="cl_separate" class="inp" title="Demucs tách giọng khỏi nhạc nền trước khi chọn mẫu và lấy lời mẫu (lần đầu tự cài + tải model ~320MB)">
+        <option value="">tự động (khi đo thấy có nhạc)</option>
+        <option value="always">luôn tách</option>
+        <option value="off">tắt</option>
+      </select>
       <label class="muted" style="font-size:12px">
         <input type="checkbox" id="cl_norm"> cân bằng âm lượng</label>
       <label class="muted" style="font-size:12px">
@@ -201,7 +207,7 @@
       <input id="cl_file" class="inp" type="file" accept="audio/*,video/*,.mp4,.mov,.mkv,.webm" multiple style="width:210px">
       <input id="cl_trim_start" class="inp" type="number" step="0.5" min="0" placeholder="Từ giây" style="width:85px" title="Điểm bắt đầu trích xuất (bỏ trống = từ đầu)">
       <input id="cl_trim_end" class="inp" type="number" step="0.5" min="0" placeholder="Đến giây" style="width:85px" title="Điểm kết thúc trích xuất (bỏ trống = hết file)">
-      <label class="muted" style="font-size:12px"><input type="checkbox" id="cl_denoise" checked> Khử nhạc nền</label>
+      <label class="muted" style="font-size:12px" title="Tách giọng khỏi nhạc nền (Demucs) khi đo thấy mẫu có nhạc"><input type="checkbox" id="cl_denoise" checked> Khử nhạc nền</label>
       <button class="btn" id="cl_add">Tạo hồ sơ giọng</button>
       <span id="cl_msg" class="muted" style="font-size:12px"></span>
     </div>
@@ -712,6 +718,7 @@
     if (st.quality) document.getElementById('cl_quality').value = st.quality;
     if (st.device) document.getElementById('cl_device').value = st.device;
     document.getElementById('cl_engine').value = st.engine || '';
+    document.getElementById('cl_separate').value = st.separate || '';
     document.getElementById('cl_norm').checked = st.normalize !== false;
     document.getElementById('cl_trim').checked = st.trim !== false;
   }
@@ -721,6 +728,7 @@
       quality: document.getElementById('cl_quality').value || null,
       device: document.getElementById('cl_device').value || null,
       engine: document.getElementById('cl_engine').value || null,
+      separate: document.getElementById('cl_separate').value || null,
       normalize: document.getElementById('cl_norm').checked,
       trim: document.getElementById('cl_trim').checked
     };
@@ -736,7 +744,7 @@
     }).catch(function () { msg.textContent = 'Lỗi lưu thiết lập.'; });
   }
 
-  ['cl_engine', 'cl_quality', 'cl_device', 'cl_norm', 'cl_trim'].forEach(function (id) {
+  ['cl_engine', 'cl_separate', 'cl_quality', 'cl_device', 'cl_norm', 'cl_trim'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', saveCloneSettings);
   });
 
@@ -762,6 +770,7 @@
       var langBadge = p.lang === 'vi' ? 'VI' : 'EN';
       var srcInfo = [];
       if (p.from_video) srcInfo.push('từ video');
+      if (p.separated && p.separated.used) srcInfo.push('đã tách nhạc nền');
       if (p.created_by) srcInfo.push('bởi @' + p.created_by);
       if (p.sample_match != null) srcInfo.push('độ khớp ' + Math.round(p.sample_match * 100) + '%');
       var sa = p.styles_auto || {};
@@ -774,7 +783,7 @@
         '<td><b>' + esc(p.name) + '</b> <span class="chip" style="font-size:10px;padding:2px 6px">' + langBadge + '</span> ' + simBadge(p.voice_sim) +
         (p.prosody_match != null ? ' <span class="chip" title="Nhịp điệu (nhấn, ngắt, lên xuống) giống bản thu gốc" style="font-size:10px;padding:2px 6px">nhịp điệu ' + Math.round(p.prosody_match * 100) + '%</span>' : '') +
         (srcInfo.length ? '<br><span class="muted" style="font-size:11px">' + esc(srcInfo.join(' · ')) + '</span>' : '') +
-        (p.state === 'processing' ? '<br><span class="muted" style="font-size:11px">đang xử lý mẫu…</span>' : '') +
+        (p.state === 'processing' ? '<br><span class="muted" style="font-size:11px">' + esc(p.stage || 'đang xử lý mẫu…') + '</span>' : '') +
         (warn ? '<br><span class="muted" style="font-size:11px">' + esc(warn) + '</span>' : '') +
         (p.error ? '<br><span style="color:var(--err);font-size:11px">' + esc(p.error) + '</span>' : '') +
         '</td>' +
@@ -786,7 +795,9 @@
         '<td style="max-width:260px"><span class="muted" style="font-size:12px">' +
         esc((p.ref_text || '—').slice(0, 120)) + '</span>' +
         (p.ref_text_source ? '<br><span class="muted" style="font-size:11px">nguồn: ' +
-          esc(p.ref_text_source) + '</span>' : '') + '</td>' +
+          esc(p.ref_text_source) + '</span>' : '') +
+        (p.user_text_check && p.user_text_check.indexOf('⚠') === 0 ? '<br><span style="color:var(--err);font-size:11px">' +
+          esc(p.user_text_check) + '</span>' : '') + '</td>' +
         '<td></td>';
       var cell = tr.lastChild;
 
