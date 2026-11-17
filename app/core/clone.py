@@ -79,6 +79,7 @@ _DEFAULT_SETTINGS = {
     "lowercase": None,      # ha chu thuong truoc khi doc (model ViVoice)
     "denoise_ref": None,    # loc on mau giong
     "engine": None,         # auto | chatterbox | f5 | voxcpm (voxcpm: ca Anh + Viet)
+    "separate": None,       # tach nhac nen (Demucs): auto | always | off
 }
 
 
@@ -458,7 +459,14 @@ def profile_info(name):
     if vs is not None and vs < float(_cfg("CLONE_SIM_WARN", 0.80)):
         warn.append("⚠ giống giọng gốc chỉ %d%% — nên dùng file mẫu DÀI 1-3 phút, sạch, "
                     "1 người nói để tool chọn được đoạn giống nhất" % round(vs * 100))
+    sep = m.get("separated") or {}
+    if sep.get("used") and m.get("ref_snr") is not None and m["ref_snr"] < 5:   # giong doc nhanh it cho lang: 5-7 dB van sach
+        warn.append("mẫu còn sót nhạc nền / méo sau khi tách (SNR %.0f dB) — nên dùng file sạch hơn"
+                    % m["ref_snr"])
     sm = m.get("sample_match")
+    if sm is not None and 0.85 <= sm < float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95)):
+        warn.append("đọc thử đúng %d%% (chưa đạt %d%%) — nghe lại bản thử trước khi dùng"
+                    % (sm * 100, float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95)) * 100))
     if sm is not None and sm < 0.85:
         warn.append("⚠ đọc thử chỉ đúng %d%% — mẫu có thể lẫn nhạc/tạp âm, quá ngắn, "
                     "nhiều người nói hoặc script sai: NÊN THAY MẪU KHÁC (6–11 giây, giọng rõ)"
@@ -489,6 +497,10 @@ def profile_info(name):
         "has_sample": (d / "sample.wav").exists() or (d / "test.mp3").exists(),
         "styles": sorted(available_styles(name)),
         "from_long": (d / "source.wav").exists(),
+        "stage": m.get("stage"),
+        "separated": m.get("separated"),
+        "user_text_check": m.get("user_text_check"),
+        "quality_ok": m.get("quality_ok"),
         "warnings": warn,
     }
 
@@ -514,21 +526,25 @@ def add_profile(name, audio_bytes, ref_text="", filename=None, background=True,
     name = safe_name(name)
     d = profile_dir(name)
     d.mkdir(parents=True, exist_ok=True)
-    for old in ("source.wav", "sample.wav", "test.mp3", "meta.json"):
+    for old in ("source.wav", "sample.wav", "test.mp3", "meta.json", "vocals.wav"):
         try:
             (d / old).unlink()
         except OSError:
             pass
     shutil.rmtree(d / "styles", ignore_errors=True)
+    for old in d.glob("raw.*"):
+        old.unlink()
     ext = (Path(filename or "").suffix or ".bin").lower()
     from_video = ext in _VIDEO_EXTS
     raw = d / ("raw" + ext)
     raw.write_bytes(audio_bytes)
 
+    # afftdn doi am sac rat nang (giong giong 0.91 -> 0.76) -> KHONG loc o day; buoc nen tach nhac
+    # (Demucs) hoac chi loc khi do thay nen on cao va giong giong khong tut (_maybe_denoise)
     use_denoise = bool(from_video) if denoise is None else bool(denoise)
     try:
         dur, trimmed = _prepare_ref(raw, d / "ref.wav", trim_start=trim_start,
-                                    trim_end=trim_end, denoise=use_denoise)
+                                    trim_end=trim_end, denoise=False)
     except Exception as e:
         _save_meta(name, state="error", error="Không đọc được file mẫu: %s" % e,
                    created=time.time(), source=filename, custom_added=True,
@@ -560,7 +576,8 @@ def add_profile(name, audio_bytes, ref_text="", filename=None, background=True,
                lang=norm_lang, custom_added=True, from_video=from_video,
                trim_range=trim_info, duration=dur, trimmed=trimmed,
                source=filename or None, ref_text_source=src, user_text=user_text or None,
-               state="processing", error=None)
+               separate_req=denoise, denoise_want=use_denoise, state="processing", error=None,
+               stage="đang tách nhạc nền…" if _separate_mode(denoise) != "off" else None)
     if user_text and trimmed:
         _save_meta(name, note="Mẫu dài hơn %.0fs nên đã tự chọn đoạn chuẩn — tool tự nghe lại "
                               "để script khớp đúng đoạn được dùng."
@@ -573,9 +590,220 @@ def add_profile(name, audio_bytes, ref_text="", filename=None, background=True,
     return profile_info(name)
 
 
+# ------------------------------------------------- tach nhac nen (Demucs)
+
+_sep_cache = {"py": None, "ok": False, "at": 0.0}
+
+
+def _separate_mode(req=None):
+    """'off' | 'auto' | 'always'. req: o "Khu nhac nen" luc them giong (False = nguoi dung tat)."""
+    if req is False:
+        return "off"
+    mode = str(_opt("separate", "CLONE_REF_SEPARATE", "auto") or "auto").lower()
+    return mode if mode in ("off", "auto", "always") else "auto"
+
+
+def _engine_env():
+    """Env cho tien trinh phu chay bang Python engine (GPU torch neu da bat)."""
+    env = os.environ.copy()
+    env.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "whisper_stt_mpl"))
+    env["PYTHONUNBUFFERED"] = "1"
+    if gpu_ready() and (GPU_DIR / "torch").is_dir():
+        env["PYTHONPATH"] = str(GPU_DIR) + os.pathsep + env.get("PYTHONPATH", "")
+    return env
+
+
+def _vocalsep_cmd(*args):
+    from . import vocalsep
+    py, _err = engine_python()
+    if not py:
+        return None
+    return [py, str(Path(vocalsep.__file__).resolve())] + [str(a) for a in args]
+
+
+def separator_ready(install=True):
+    """Python engine co thu vien demucs chua — chua co thi tu cai 1 lan (--no-deps)."""
+    cmd = _vocalsep_cmd("--install" if install else "--check")
+    if not cmd:
+        return False
+    if _sep_cache["py"] == cmd[0] and (_sep_cache["ok"] or time.time() - _sep_cache["at"] < 600):
+        return _sep_cache["ok"]
+    kw = {"creationflags": 0x08000000} if os.name == "nt" else {}
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=_engine_env(), **kw)
+        ok = r.returncode == 0
+    except Exception:
+        ok = False
+    _sep_cache.update(py=cmd[0], ok=ok, at=time.time())
+    return ok
+
+
+def _decode(src, out, sr, ch, trim=None):
+    ta = []
+    if trim:
+        ts, te = trim
+        if ts:
+            ta += ["-ss", "%.2f" % float(ts)]
+        if te and float(te) > float(ts or 0):
+            ta += ["-to", "%.2f" % float(te)]
+    _run_ffmpeg(["-y"] + ta + ["-i", str(src), "-vn", "-ac", str(ch), "-ar", str(sr),
+                               "-c:a", "pcm_s16le", str(out)])
+
+
+def _bg_floor_db(wav):
+    """Muc nen trong khoang nghi so voi giong (dB): ~-60 = phong thu sach, > -40 = co nhac/on."""
+    import numpy as np
+    import soundfile as sf
+    y, _sr = sf.read(str(wav), dtype="float32", always_2d=True)
+    y = y.mean(1)
+    fr = 320
+    n = len(y) // fr
+    if n < 50:
+        return 0.0
+    db = 20 * np.log10(np.sqrt((y[:n * fr].reshape(n, fr) ** 2).mean(1)) + 1e-6)
+    return float(np.percentile(db, 10) - np.percentile(db, 95))
+
+
+def _run_vocalsep(src, dst, dur):
+    """-> dict ket qua cua vocalsep.py (tien trinh rieng; GPU vai giay, CPU ~3-5x thoi luong)."""
+    dev = get_settings().get("device")
+    cmd = _vocalsep_cmd("--in", src, "--out", dst, "--sr", int(_cfg("CLONE_SR", 24000)),
+                        "--model", _cfg("CLONE_SEPARATE_MODEL", "htdemucs_ft"),
+                        "--device", dev if dev in ("cuda", "cpu") else "auto")
+    if not cmd:
+        raise RuntimeError("chưa có Python engine")
+    kw = {"creationflags": 0x08000000} if os.name == "nt" else {}
+    timeout = int(min(3600, 300 + 15 * dur))
+    last = None
+    for env_extra in ({}, {"HF_ENDPOINT": "https://hf-mirror.com"}):   # mang chan HF -> mirror
+        env = _engine_env()
+        env.update(env_extra)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, **kw)
+        lines = [ln for ln in (r.stdout or "").splitlines() if ln.startswith("{")]
+        last = json.loads(lines[-1]) if lines else {
+            "ok": False, "error": ((r.stderr or "").strip().splitlines() or ["không rõ"])[-1][:300]}
+        if last.get("ok") or not re.search(r"(?i)connect|http|hub|resolve|timeout|offline|entrynotfound",
+                                           last.get("error") or ""):
+            break
+    if last.get("ok"):
+        return last
+    raise RuntimeError(last.get("error") or "tách nhạc lỗi")
+
+
+def _separate_music(name):
+    """Tach nhac nen khoi file goc (Demucs) roi chuan hoa lai mau tu phan GIONG.
+
+    Chay o buoc nen (sau add_profile). Mau sach (khoang nghi lang nhu phong thu) hoac do
+    duoc nhac rat nho thi giu nguyen. Tra ve True neu mau da duoc thay bang ban tach."""
+    d = profile_dir(name)
+    m = profile_meta(name)
+    mode = _separate_mode(m.get("separate_req"))
+    raw = next(iter(sorted(d.glob("raw.*"))), None)
+    if mode == "off" or raw is None:
+        return False
+    trim = m.get("trim_range")
+    sep_in = d / "sep_in.wav"
+    vocals = d / "vocals.wav"
+    try:
+        _decode(raw, sep_in, 44100, 2, trim)
+        dur = _wav_seconds(sep_in)
+        if mode == "auto" and not m.get("from_video"):
+            try:
+                floor = _bg_floor_db(sep_in)
+            except Exception:
+                floor = 0.0
+            if floor < float(_cfg("CLONE_SEPARATE_CLEAN_FLOOR_DB", -55.0)):
+                _save_meta(name, separated={"used": False, "floor_db": round(floor, 1),
+                                            "why": "mẫu sạch"})
+                return False
+        if not separator_ready():
+            _save_meta(name, separated={"used": False, "why": "chưa cài được thư viện tách nhạc"})
+            return False
+        info = _run_vocalsep(sep_in, vocals, dur)
+    finally:
+        try:
+            sep_in.unlink()
+        except OSError:
+            pass
+    use = mode == "always" or info["music_db"] > float(_cfg("CLONE_SEPARATE_MIN_MUSIC_DB", -25.0))
+    sep = {"used": use, "music_db": info["music_db"], "device": info.get("device"),
+           "seconds": info.get("seconds"), "model": info.get("model")}
+    if not use:
+        _save_meta(name, separated=dict(sep, why="nhạc nền rất nhỏ"))
+        return False
+    try:
+        (d / "source.wav").unlink()
+    except OSError:
+        pass
+    # giong da tach: khong highpass/lowpass/afftdn nua (moi lop loc lam lech am sac 0.93 -> 0.91)
+    dur2, trimmed = _prepare_ref(vocals, d / "ref.wav", denoise=False, bandpass=False)
+    _adopt_ref(name, dur2, trimmed, separated=sep)
+    return True
+
+
+def _adopt_ref(name, dur, trimmed, **meta):
+    """Mau moi da ghi (ref.wav / source.wav): dat lai loi mau cho khop (loi go tay chi dung
+    khi mau khong bi cat ngan)."""
+    d = profile_dir(name)
+    user = (profile_meta(name).get("user_text") or "").strip()
+    if user and not trimmed:
+        (d / "ref.txt").write_text(user, encoding="utf-8")
+        src = "người dùng"
+    else:
+        (d / "ref.txt").write_text("", encoding="utf-8")
+        src = None
+    _save_meta(name, duration=dur, trimmed=trimmed, ref_text_source=src, **meta)
+
+
+def _maybe_denoise(name):
+    """Khong tach nhac (mau sach / nhac nho / chua cai Demucs) ma van muon loc on: chi loc afftdn
+    khi nen on cao, va CHAM giong giong truoc/sau — tut qua CLONE_DENOISE_MAX_DROP thi giu ban
+    khong loc (afftdn hay lam giong mong, khac nguoi that)."""
+    d = profile_dir(name)
+    m = profile_meta(name)
+    if not (m.get("denoise_want") or _opt("denoise_ref", "CLONE_REF_DENOISE", False)):
+        return False
+    raw = next(iter(sorted(d.glob("raw.*"))), None)
+    if raw is None:
+        return False
+    tmp = Path(tempfile.mkdtemp(prefix="denoise_", dir=str(d)))
+    try:
+        _decode(raw, tmp / "mix.wav", 16000, 1, m.get("trim_range"))
+        try:
+            floor = _bg_floor_db(tmp / "mix.wav")
+        except Exception:
+            floor = 0.0
+        if floor < float(_cfg("CLONE_DENOISE_FLOOR_DB", -40.0)):
+            _save_meta(name, denoised={"used": False, "floor_db": round(floor, 1), "why": "nền đủ sạch"})
+            return False
+        dur, trimmed = _prepare_ref(raw, tmp / "ref.wav", *(m.get("trim_range") or [None, None]),
+                                    denoise=True)
+        cmp = "source.wav" if (tmp / "source.wav").exists() and (d / "source.wav").exists() else "ref.wav"
+        sims = _voicesim([d / cmp], cands=[tmp / cmp])
+        sim = sims[0] if sims else None
+        drop = float(_cfg("CLONE_DENOISE_MAX_DROP", 0.03))
+        info = {"floor_db": round(floor, 1), "sim": sim}
+        if sim is None or sim < 1.0 - drop:
+            _save_meta(name, denoised=dict(info, used=False, why="lọc làm đổi giọng"))
+            return False
+        for f in ("ref.wav", "source.wav"):
+            if (tmp / f).exists():
+                shutil.copy2(tmp / f, d / f)
+            elif f == "source.wav":
+                try:
+                    (d / f).unlink()
+                except OSError:
+                    pass
+        _adopt_ref(name, dur, trimmed, denoised=dict(info, used=True))
+        return True
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _transcribe_ref(audio_path, name=None, model_name=None):
     """Nghe file mau voi ngon ngu goi y cua profile ('vi' hoac 'en').
-    Uu tien large-v3-turbo de bat chinh xac 100% tu tieng Viet ca khi mau co nhac nen."""
+    Uu tien large-v3-turbo de bat chinh xac 100% tu tieng Viet ca khi mau co nhac nen.
+    Che do 'nghe ky' (engine.transcribe careful): VAD, khong noi ngu canh, bo cau ao."""
     from . import engine
     pref = model_name or str(_cfg("CLONE_REF_TRANSCRIBE_MODEL", "large-v3-turbo"))
     lang_hint = profile_meta(name).get("lang") if name else None
@@ -585,7 +813,8 @@ def _transcribe_ref(audio_path, name=None, model_name=None):
     last_err = None
     for m_name in cands:
         try:
-            return engine.transcribe(engine.get_model(m_name), audio_path, language=lang_hint)
+            return engine.transcribe(engine.get_model(m_name), audio_path, language=lang_hint,
+                                     careful=True)
         except Exception as e:
             last_err = e
     raise last_err
@@ -594,7 +823,12 @@ def _transcribe_ref(audio_path, name=None, model_name=None):
 def _check_user_text(name):
     """Script nguoi dung go KHONG khop mau (go nham, dan script cua mau khac) ->
     F5 doc sai / nuot chu / doc lan chu cua mau. Nghe lai bang Whisper; lech nhieu
-    thi thay bang ban nghe duoc."""
+    thi thay bang ban nghe duoc.
+
+    KHONG ghi de khi ban nghe khong dang tin: la cau ao kinh dien (subscribe / dang ky kenh...),
+    nghe ra qua it chu so voi do dai giong, hoac khong khuc nao khop loi go tay (Whisper doan
+    bua tren giong doc nhanh / lan nhac) — loi go tay dung bi thay bang cau ao la loi nang nhat."""
+    from . import engine
     d = profile_dir(name)
     try:
         user = (d / "ref.txt").read_text(encoding="utf-8").strip()
@@ -603,19 +837,64 @@ def _check_user_text(name):
     if not user or profile_meta(name).get("ref_text_source") != "người dùng":
         return
     try:
-        heard = (_transcribe_ref(d / "ref.wav", name=name).get("text") or "").strip()
+        res = _transcribe_ref(d / "ref.wav", name=name)
     except Exception:
         return
-    norm = lambda t: re.findall(r"\w+", t.lower())
-    a, b = norm(user), norm(heard)
+    heard = (res.get("text") or "").strip()
+    heard_cmp = heard
+    try:
+        from .expressive import normalize_numbers_en, normalize_numbers_vi
+        heard_cmp = (normalize_numbers_vi if _is_vietnamese(user) else normalize_numbers_en)(heard)
+    except Exception:
+        pass
+    norm = lambda t: re.findall(r"\w+", engine._fold(t))
+    a, b = norm(user), norm(heard_cmp)
+    dropped = [x["text"] for x in res.get("dropped") or [] if engine.is_hallucination(x["text"], user)]
+
+    def keep(why):
+        _save_meta(name, user_text_check=why, user_text_heard=heard[:200] or None)
+
     if not b:
-        return
+        return keep("bản nghe là câu ảo — giữ lời gõ tay" if dropped else "không nghe ra chữ")
+    if engine.is_hallucination(heard, allow=user):
+        return keep("bản nghe là câu ảo — giữ lời gõ tay")
     import difflib
-    ratio = difflib.SequenceMatcher(None, a, b).ratio()
-    if ratio < 0.7:
-        (d / "ref.txt").write_text(heard, encoding="utf-8")
-        _save_meta(name, ref_text_source="tự nghe (script gõ tay không khớp mẫu, %.0f%%)" % (ratio * 100),
-                   user_text=user)
+    ratio = difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
+    if ratio >= 0.7:
+        return keep("khớp %.0f%%" % (ratio * 100))
+    # nghe ra qua it chu: giong doc nhanh / co nhac -> Whisper bo sot ca doan, KHONG phai go sai
+    words = res.get("words") or []
+    voiced = sum(max(0.0, float(w["end"]) - float(w["start"])) for w in words)
+    dur = float(res.get("duration") or 0) or _wav_seconds(d / "ref.wav")
+    if dropped or len(b) < 0.6 * len(a) and voiced < 0.6 * dur:
+        return keep("bản nghe thiếu (%d/%d chữ) — giữ lời gõ tay" % (len(b), len(a)))
+    # chu Whisper nghe LECH loi go tay ma chinh no cung khong chac (p thap) -> nghe nham, khong phai go sai
+    def wnorm(t):
+        try:
+            from .expressive import normalize_numbers_vi
+            t = normalize_numbers_vi(t) if re.search(r"\d", t) else t
+        except Exception:
+            pass
+        return norm(t)
+    hw = [(t, float(w.get("p", 1.0))) for w in words for t in wnorm(w["text"])]
+    sm = difflib.SequenceMatcher(None, a, [t for t, _p in hw], autojunk=False)
+    matched = {j for blk in sm.get_matching_blocks() for j in range(blk.b, blk.b + blk.size)}
+    off = [p for j, (_t, p) in enumerate(hw) if j not in matched]
+    if off and sum(off) / len(off) < 0.75:
+        return keep("bản nghe không chắc ở chỗ lệch (p=%.2f, khớp %.0f%%) — giữ lời gõ tay"
+                    % (sum(off) / len(off), ratio * 100))
+    # tung khuc ~8 chu cua ban nghe: co khuc nao trung lap loi go tay khong?
+    best = 0.0
+    for i in range(0, max(1, len(b) - 3), 4):
+        chunk = b[i:i + 8]
+        sm = difflib.SequenceMatcher(None, a, chunk, autojunk=False)
+        best = max(best, sum(blk.size for blk in sm.get_matching_blocks()) / float(len(chunk)))
+    if best < 0.5:
+        return keep("⚠ lời gõ tay khác hẳn bản nghe (%.0f%%) — giữ lời gõ tay, nên kiểm tra lại"
+                    % (ratio * 100))
+    (d / "ref.txt").write_text(heard, encoding="utf-8")
+    _save_meta(name, ref_text_source="tự nghe (script gõ tay không khớp mẫu, %.0f%%)" % (ratio * 100),
+               user_text=user, user_text_check="thay bằng bản nghe")
 
 
 def _smart_ref(name):
@@ -657,7 +936,8 @@ def _smart_ref(name):
              if not any(w["t0"] < b and w["t1"] > a for a, b in used)]   # khong trung mau cam xuc
     _save_meta(name, lang=lang_det, duration=round(m["dur"], 2),
                ref_text_source="tự chọn đoạn hay nhất từ file %.0fs" % (len(y) / refpick.SR),
-               styles=styles, ref_wpm=round(m["wpm"]),
+               styles=styles, ref_wpm=round(m["wpm"]), ref_snr=round(m.get("snr", 10.0), 1),
+               ref_foreign=m.get("foreign", 0),
                ref_window=[round(m["t0"], 2), round(m["t1"], 2)], ref_cands=cands)
     return True
 
@@ -886,15 +1166,22 @@ def add_style_sample(name, style, audio_bytes, filename=None, ref_text="", denoi
         raw = work / ("raw" + ext)
         raw.write_bytes(audio_bytes)
         out = work / "ref.wav"
+        want_dn = bool(ext in _VIDEO_EXTS) if denoise is None else bool(denoise)
         try:
-            dur, _trim = _prepare_ref(raw, out, denoise=bool(ext in _VIDEO_EXTS) if denoise is None
-                                      else bool(denoise))
+            dur, _trim = _prepare_ref(raw, out, denoise=False)
+            if want_dn:
+                dn = work / "ref_dn.wav"
+                dur_dn, _t = _prepare_ref(raw, dn, denoise=True)
         except Exception as e:
             raise ValueError("Không đọc được file mẫu (%s)." % e)
         if dur < 2.5:
             raise ValueError("Mẫu quá ngắn (%.1f giây) — cần 5–12 giây nói rõ cảm xúc." % dur)
-        got = _voicesim(_sim_refs(name), [out])
+        got = _voicesim(_sim_refs(name), [out, dn] if want_dn else [out])
         sim = got[0] if got else None
+        # loc on (afftdn) chi giu khi KHONG lam lech giong (tut > 0.03 = giong mong, khac nguoi that)
+        if want_dn and got and len(got) > 1 and got[1] >= got[0] - float(_cfg("CLONE_DENOISE_MAX_DROP", 0.03)):
+            shutil.copy2(dn, out)
+            dur, sim = dur_dn, got[1]
         floor = float(_cfg("CLONE_STYLE_UPLOAD_MIN", 0.75))
         if sim is not None and sim < floor:
             raise ValueError("Mẫu chỉ giống giọng '%s' %d%% (cần từ %d%%) — có thể là người khác, "
@@ -1048,7 +1335,10 @@ def _improve_similarity(name, say=None):
     base_pc = prosody_match(name)
     m = profile_meta(name)
     cands = m.get("ref_cands") or []
-    good = base >= target and (base_pc is None or base_pc >= p_target)
+    m_min = float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95))
+    sim_ok = float(_cfg("CLONE_SIM_OK", 0.85))
+    good = (base >= target and (base_pc is None or base_pc >= p_target)
+            and (m.get("sample_match") is None or m["sample_match"] >= m_min))
     if good or not (d / "source.wav").exists() or len(cands) < 2:
         return base
     from . import refpick
@@ -1072,7 +1362,8 @@ def _improve_similarity(name, say=None):
             # thu toi da n_try doan; con duoi 80% thi thu TIEP moi doan ung vien con lai
             if idx >= n_try and best["sim"] >= floor:
                 break
-            if best["sim"] >= target and (best["pc"] or 0) >= p_target:
+            if (best["sim"] >= target and (best["pc"] or 0) >= p_target
+                    and (best["match"] is None or best["match"] >= m_min)):
                 break
             for f in ("ref.wav", "ref.txt", "sample.wav"):
                 if (d / f).exists():
@@ -1092,8 +1383,11 @@ def _improve_similarity(name, say=None):
             say("Thử đoạn mẫu %.1f-%.1fs: giống giọng %s, nhịp điệu %s" % (
                 c["t0"], c["t1"], "?" if sim is None else "%.0f%%" % (sim * 100),
                 "?" if pc is None else "%.0f%%" % (pc * 100)))
-            if (sim is not None and sim >= min(best["sim"], floor) and ok_text
-                    and total(sim, pc) > total(best["sim"], best["pc"]) + 0.005):
+            # ban doc thu cua doan cu doc SAI chu (< 95%) ma doan nay doc dung + van giong giong -> lay
+            fixes_text = (match is not None and match >= m_min and sim is not None and sim >= sim_ok
+                          and (best["match"] or 0) < m_min)
+            if fixes_text or (sim is not None and sim >= min(best["sim"], floor) and ok_text
+                              and total(sim, pc) > total(best["sim"], best["pc"]) + 0.005):
                 best = {"sim": sim, "match": match, "pc": pc}
                 _save_meta(name, ref_window=[c["t0"], c["t1"]], duration=c["dur"],
                            ref_wpm=c["wpm"], ref_text_source="tự chọn đoạn GIỐNG GIỌNG + NHỊP "
@@ -1113,6 +1407,12 @@ def _improve_similarity(name, say=None):
 def _finish_profile(name):
     """Viec nen sau khi them giong: lay script mau + tao file nghe thu."""
     err_msg = None
+    try:
+        if not _separate_music(name):
+            _maybe_denoise(name)
+    except Exception as e:
+        _save_meta(name, separate_error=str(e)[:300])
+    _save_meta(name, stage=None)
     try:
         try:
             _smart_ref(name)
@@ -1134,6 +1434,11 @@ def _finish_profile(name):
         _improve_similarity(name)          # cham + tu nang do giong giong (khong bat buoc)
     except Exception as e:
         _save_meta(name, sim_error=str(e)[:200])
+    m = profile_meta(name)                 # dat = ban nghe thu DO MODEL DOC khop chu + giong giong
+    if m.get("sample_match") is not None:
+        _save_meta(name, quality_ok=bool(
+            m["sample_match"] >= float(_cfg("CLONE_SAMPLE_MATCH_MIN", 0.95))
+            and (m.get("voice_sim") is None or m["voice_sim"] >= float(_cfg("CLONE_SIM_OK", 0.85)))))
     try:                                   # chua co mau cam xuc -> tu tao (Chatterbox / bien doi)
         if not ({"hype", "calm"} <= available_styles(name)):
             make_styles_auto(name)
@@ -1182,6 +1487,14 @@ def _auto_speed(name, target_wpm=None):
         return
     is_vi = profile_lang(name) == "vi"
     if is_vi:
+        # giong nguon doc QUA NHANH (quang cao) -> cham lai chut de ban clone co cho tho, khong nuot chu
+        wpm = float(profile_meta(name).get("ref_wpm") or 0)
+        fast = float(_cfg("CLONE_VI_FAST_WPM", 300))
+        if wpm >= fast:
+            _save_meta(name, speed=0.92, note="Mẫu đọc rất nhanh (%d âm tiết/phút) — tự giảm tốc độ "
+                                              "0.92 để bản clone có chỗ thở, đọc rõ chữ." % wpm)
+            make_sample(name)
+            return
         _save_meta(name, speed=1.0, note="Tự cân nhịp theo âm tiết mẫu tiếng Việt (tốc độ chuẩn 1.00).")
         return
     p = profile_dir(name) / "sample.wav"
@@ -1256,7 +1569,7 @@ def _wav_seconds(p):
         return 0.0
 
 
-def _prepare_ref(src, dst, trim_start=None, trim_end=None, denoise=False):
+def _prepare_ref(src, dst, trim_start=None, trim_end=None, denoise=False, bandpass=True):
     """Mau giong (Audio hoac Video) -> wav 24kHz mono s16, cat khoang giay neu chon,
     loc nhac nen/tap am, bo im lang, gioi han CLONE_REF_MAX_SEC.
 
@@ -1264,8 +1577,8 @@ def _prepare_ref(src, dst, trim_start=None, trim_end=None, denoise=False):
     """
     sr = int(_cfg("CLONE_SR", 24000))
     max_sec = float(_cfg("CLONE_REF_MAX_SEC", 12.0))
-    filters = ["highpass=f=75", "lowpass=f=8500"]
-    if denoise or _opt("denoise_ref", "CLONE_REF_DENOISE", False):
+    filters = ["highpass=f=75", "lowpass=f=8500"] if bandpass else []
+    if denoise:                 # afftdn: chi goi tu _maybe_denoise (co cham giong giong truoc/sau)
         filters.append("afftdn=nf=-22")
     # chi rut ngan khoang lang DAI (> 0.7s con 0.45s) - giu nhip ngat tu nhien cua
     # nguoi noi (truoc day moi khoang lang bi ep con 0.3s -> mau doc doc, nhanh hon that)
@@ -1329,10 +1642,28 @@ def _ensure_ref_text(name):
         raise RuntimeError("Thiếu file mẫu ref.wav.")
 
     errs = []
+    src = d / "source.wav"
     for model_name in (str(_cfg("CLONE_REF_TRANSCRIBE_MODEL", "large-v3-turbo")), "small", "tiny"):
         try:
-            res = _transcribe_ref(ref, name=name, model_name=model_name)
-            words = res.get("words") or []
+            if src.exists():
+                # ref.wav = dau file nguon: nghe CA file (doan ngan giong doc nhanh de bi nghe ao)
+                # roi lay cac tu nam tron trong ref theo word timestamps
+                res = _transcribe_ref(src, name=name, model_name=model_name)
+                ref_dur = _wav_seconds(ref)
+                win = profile_meta(name).get("ref_window") or [0.0, ref_dur]
+                t0, t1 = float(win[0]), float(win[1])
+                words = [dict(w, start=float(w["start"]) - t0, end=float(w["end"]) - t0)
+                         for w in res.get("words") or []
+                         if float(w["start"]) >= t0 - 0.05 and float(w["end"]) <= t1 + 0.1]
+                res = dict(res, text="".join(w["text"] for w in words).strip())
+                if t0 == 0 and words and words[-1]["end"] < ref_dur - 0.3:   # bo chu bi cat giua chung
+                    data = _run_ffmpeg(["-i", str(ref), "-t", "%.2f" % (float(words[-1]["end"]) + 0.15),
+                                        "-c:a", "pcm_s16le", "-f", "wav", "pipe:1"])
+                    ref.write_bytes(data)
+                    _save_meta(name, duration=round(_wav_seconds(ref), 2))
+            else:
+                res = _transcribe_ref(ref, name=name, model_name=model_name)
+                words = res.get("words") or []
             if words:
                 try:
                     from . import refpick

@@ -142,7 +142,24 @@ CLONE_POST_FADE_MS = 10      # fade in/out chong tieng "tach" khi lap track
 CLONE_REF_MAX_SEC = 11.0     # < 12s: mau dai hon F5 tu cat audio nhung GIU script -> doc lan script vao ket qua
 CLONE_REF_MIN_SEC = 3.0      # ngan hon se canh bao
 CLONE_REF_DENOISE = False    # bat neu mau co tieng on nen (co the lam mat hoi)
+CLONE_DENOISE_FLOOR_DB = -40.0  # chi loc on (afftdn) khi nen on cao hon muc nay (so voi giong)
+CLONE_DENOISE_MAX_DROP = 0.03   # loc xong giong giong tut qua muc nay -> giu ban khong loc
 CLONE_REF_TRANSCRIBE_MODEL = "large-v3-turbo"  # model Whisper dung de tu lay script mau (chinh xac ca khi co nhac nen)
+# Tach nhac nen (Demucs htdemucs_ft, chi giu giong) TRUOC khi chon mau / lay loi mau. Mau quang cao
+# co nhac: clone thang chi doc dung ~60% chu va Whisper nghe ao ("Hay subscribe cho kenh...").
+#   auto   = video, hoac file audio khong sach tuyet doi -> tach thu; nhac du to moi dung ban tach
+#   always = luon dung ban da tach      off = khong tach (giu bo loc ffmpeg cu)
+# Chay bang Python engine o tien trinh rieng (GPU neu co, CPU van chay — cham hon ~3-5x thoi luong).
+# Thu vien tu cai 1 lan (--no-deps, khong doi phien ban goi nao); model ~320MB tai vao data/hf_cache.
+CLONE_REF_SEPARATE = "auto"
+CLONE_SEPARATE_MODEL = "htdemucs_ft"
+CLONE_SEPARATE_MIN_MUSIC_DB = -25.0   # nhac/giong (dB) do duoc cao hon muc nay moi dung ban tach (sach ~ -45)
+CLONE_SEPARATE_CLEAN_FLOOR_DB = -55.0  # khoang nghi lang hon muc nay (so voi giong) = mau phong thu -> bo qua
+# Kiem tra cuoi khi them giong = file NGHE THU do model doc ra (khong phai Whisper nghe mau ngan):
+# chua dat thi tu thu cac doan mau ung vien khac trong file nguon.
+CLONE_SAMPLE_MATCH_MIN = 0.95  # Whisper nghe ban doc thu phai khop >= 95% chu
+CLONE_SIM_OK = 0.85            # giong giong goc toi thieu de nhan doan thay the
+CLONE_VI_FAST_WPM = 300        # mau tieng Viet nhanh hon muc nay (am tiet/phut) -> speed 0.92
 CLONE_SR = 24000             # F5 lam viec o 24kHz — khop luon voi track lap rap
 
 # --- Dich "xin" bang AI (tuy chon, nang chat luong dich len muc long tieng chuyen nghiep) ---

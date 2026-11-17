@@ -43,6 +43,8 @@ rem AI local (Ollama) cho "AI bien kich": cua so rieng, khong chan tool
 start "AI local" /min "%PY%" setup_ai.py
 rem Tai model Chatterbox (giong Anh tu nhien) chay nen, chi lan dau
 start "Chatterbox" /min "%PY%" setup_chatterbox.py --wait
+rem Tach nhac nen mau giong (Demucs): cai thu vien + tai model ~320MB chay nen, chi lan dau
+start "Tach nhac nen" /min "%PY%" app\core\vocalsep.py --prefetch
 
 echo [*] Khoi dong server... Trinh duyet se tu mo. Dong cua so nay la TAT ung dung.
 "%PY%" run.py --open

@@ -12,6 +12,30 @@ import re
 
 SR = 24000
 
+# 1 am tiet tieng Viet (da bo dau): phu am dau + van + phu am cuoi. Tu KHONG khop (Dekoma,
+# Provitamin, THC, Earthen...) = ten rieng / chu nuoc ngoai: loi mau lech phat am -> F5 / VoxCPM
+# doc ngong, nuot chu -> tranh chon doan co nhieu tu nhu vay.
+_VI_SYL = re.compile(r"^(ngh|ng|nh|ch|gh|gi|kh|ph|qu|th|tr|[bcdghklmnprstvx])?"
+                     r"[aeiouy]{1,3}(ch|ng|nh|[cmnpt])?$")
+BREATH_SEC = 0.28        # khoang tho toi thieu o dau cau / dau phay trong mau (giong doc qua nhanh)
+
+
+def _fold(t):
+    import unicodedata
+    t = unicodedata.normalize("NFD", (t or "").lower().replace("đ", "d"))
+    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+
+
+def foreign_words(text):
+    """Cac tu khong phai am tiet tieng Viet (chu viet tat IN HOA cung tinh)."""
+    out = []
+    for w in re.findall(r"\w+", text or ""):
+        if w.isdigit():
+            continue
+        if (len(w) >= 2 and w.isupper()) or not _VI_SYL.match(_fold(w)):
+            out.append(w)
+    return out
+
 
 def _load(path):
     import numpy as np
@@ -79,26 +103,48 @@ def _join_words_natural(ws):
                     clause_words = 0
             elif s[-1:] in "?!,;:…":
                 clause_words = 0
+            else:
+                # Whisper hay bo dau cau khi doc nhanh / qua ranh gioi segment: tu sau VIET HOA
+                # + co cho ngat -> them dau ('.' neu ngat dai) de mau co nhip tho dung cho
+                nxt = (ws[k + 1].get("text") or "").strip()
+                gap = float(ws[k + 1]["start"]) - float(w["end"])
+                if nxt[:1].isupper() and gap >= 0.12 and clause_words >= 3:
+                    tok = s + ("." if gap >= 0.28 else ",") + tok[len(s):]
+                    clause_words = 0
         parts.append(tok)
     return "".join(parts).strip()
 
 
-def _windows(words, dur_total, min_sec=4.8, max_sec=10.5, min_conf=0.52):
-    """Cac doan bat dau dau cau, ket thuc cuoi cau (co khoang ngat thuc >= 0.22s), dai min..max giay."""
+def _is_vi_text(text):
+    return bool(re.search(r"[ăâđêôơưàáảãạèéẻẽẹìíỉĩịòóỏõọùúủũụỳýỷỹỵ]", (text or "").lower()))
+
+
+def _windows(words, dur_total, min_sec=4.8, max_sec=10.5, min_conf=0.52, loose=False):
+    """Cac doan bat dau dau cau, ket thuc cuoi cau (co khoang ngat thuc >= 0.22s), dai min..max giay.
+    loose=True (giong quang cao doc nhanh, Whisper gan nhu khong cham cau): ranh gioi ca o dau
+    phay / cho ngat >= 0.30s."""
     W = [w for w in words if (w.get("text") or "").strip()]
     if not W:
         return []
+    gap_after = lambda i: float(W[i + 1]["start"]) - float(W[i]["end"])
     ends = {
         i for i, w in enumerate(W)
         if i == len(W) - 1 or (
             w["text"].strip()[-1:] in ".?!…"
-            and float(W[i + 1]["start"]) - float(w["end"]) >= 0.22
+            and gap_after(i) >= 0.22
         )
     }
+    if loose:
+        ends |= {i for i in range(len(W) - 1)
+                 if (W[i]["text"].strip()[-1:] in ",;:" and gap_after(i) >= 0.12) or gap_after(i) > 0.30}
     if len(ends) < 2:                              # Whisper khong cham cau -> dung cho ngat > 0.30s
         ends = {i for i in range(len(W) - 1) if W[i + 1]["start"] - W[i]["end"] > 0.30}
         ends.add(len(W) - 1)
     starts = [0] + sorted(i + 1 for i in ends if i + 1 < len(W))
+    # ranh gioi CAU THAT: dau file / sau dau cham / cho ngat dai -> mau bat dau & ket thuc tron cau
+    strong = {i for i in range(len(W) - 1)
+              if (W[i]["text"].strip()[-1:] in ".?!…" and gap_after(i) >= 0.12) or gap_after(i) >= 0.35}
+    strong.add(len(W) - 1)
     out = []
     for si in starts:
         for ei in sorted(e for e in ends if e >= si):
@@ -120,13 +166,15 @@ def _windows(words, dur_total, min_sec=4.8, max_sec=10.5, min_conf=0.52):
                 continue
             raw_text = _join_words_natural(ws)
             text = _clean_win_text(raw_text)
-            if not text:
+            if not text or re.search(r"[+@&/#=]", text):   # ky hieu (SPF 50+) F5 khong doc duoc
                 continue
             n_words = len(re.findall(r"\w+", text))
             speech_dur = sum(max(0.04, w["end"] - w["start"]) for w in ws)
             max_wdur = max((float(w["end"]) - float(w["start"])) for w in ws) if ws else 0.3
             out.append({
                 "t0": t0, "t1": t1, "dur": d, "text": text,
+                "edges": int(si == 0 or (si - 1) in strong) + int(ei in strong),
+                "foreign": len(foreign_words(text)) if _is_vi_text(text) else 0,
                 "wpm": n_words / d * 60.0,
                 "speech_wpm": n_words / max(1.0, speech_dur) * 60.0,
                 "avg_p": avg_p, "min_p": min_p, "max_wdur": max_wdur,
@@ -145,6 +193,9 @@ def pick(src_path, words, want_styles=True):
         wins = _windows(words, total, min_sec=4.5, max_sec=11.5, min_conf=0.35)
     if not wins and total >= 4.0:
         wins = _windows(words, total, min_sec=4.0, max_sec=12.0, min_conf=0.30)
+    if not wins:                                   # doc nhanh, it dau cham: cat o dau phay / cho ngat
+        wins = (_windows(words, total, min_sec=4.8, max_sec=10.5, min_conf=0.35, loose=True)
+                or _windows(words, total, min_sec=4.0, max_sec=12.0, min_conf=0.30, loose=True))
     if not wins:
         return None
     f0, db = _f0_track(y)
@@ -203,7 +254,12 @@ def pick(src_path, words, want_styles=True):
         conf_bonus = (w.get("avg_p", 0.9) - 0.90) * 32.0 + (w.get("min_p", 0.5) - 0.70) * 7.0
         snr_bonus = 0.20 * min(20.0, max(0.0, w.get("snr", 10.0) - 4.0))
         sfx_pen = max(0.0, w.get("max_wdur", 0.30) - 0.39) * 15.0
+        # tron cau (bat dau + ket thuc dung ranh gioi cau) va it ten rieng / chu nuoc ngoai
+        edge_bonus = 0.6 * w.get("edges", 2)
+        foreign_pen = 1.2 * w.get("foreign", 0)
         return (conf_bonus
+                + edge_bonus
+                - foreign_pen
                 + snr_bonus
                 - sfx_pen
                 - abs(w["wpm"] - wpm_med) / 28.0
@@ -288,6 +344,31 @@ def _clean_bgm_with_words(c, t0, words):
     return (c * env).astype("float32")
 
 
+def _add_breaths(c, t0, words, need=BREATH_SEC):
+    """Giong doc qua nhanh (quang cao, gan nhu khong ngat): o dau cau / dau phay ma khoang ngat
+    that < need giay thi chen them im lang cho du -> ban clone hoc duoc cho THO, khong doc
+    lien mot mach. Chi chen o dung cho loi mau co dau (khop text)."""
+    import numpy as np
+    cuts = []
+    for k in range(len(words) - 1):
+        tok = (words[k].get("text") or "").strip()
+        if tok[-1:] not in ".?!…,;:":
+            continue
+        a, b = float(words[k]["end"]) - t0, float(words[k + 1]["start"]) - t0
+        add = need - max(0.0, b - a)
+        if add > 0.04:
+            cuts.append((int((a + b) / 2 * SR), int(add * SR)))
+    if not cuts:
+        return c
+    parts, last = [], 0
+    for at, n in cuts:
+        at = max(last, min(len(c), at))
+        parts += [c[last:at], np.zeros(n, dtype=c.dtype)]
+        last = at
+    parts.append(c[last:])
+    return np.concatenate(parts)
+
+
 def write_clip(y, win, out_wav, gain):
     import numpy as np
     import soundfile as sf
@@ -295,6 +376,7 @@ def write_clip(y, win, out_wav, gain):
     c = y[a:b].copy()
     if win.get("words"):
         c = _clean_bgm_with_words(c, float(win["t0"]), win["words"])
+        c = _add_breaths(c, float(win["t0"]), win["words"])
     peak = float(np.abs(c).max())
     if peak > 1e-4:
         c = c * (0.89 / peak)

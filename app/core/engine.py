@@ -6,7 +6,9 @@ duoc bat san de dat toc do tot nhat tren may khong co GPU NVIDIA.
 """
 
 import os
+import re
 import threading
+import unicodedata
 from pathlib import Path
 
 from ..config import BATCH_SIZE, MODELS
@@ -54,26 +56,75 @@ def downloaded_models():
     return sorted(found)
 
 
-def transcribe(model, path, language=None, progress=None):
+# Cau "nghe ao" kinh dien cua Whisper: doan nhac / giong doc nhanh / im lang bi doan thanh
+# loi chao cuoi video YouTube (hoc tu phu de trong du lieu train). Ghi KHONG DAU, chu thuong.
+HALLUCINATION_PATTERNS = (
+    r"subscribe", r"dang ky (cho )?kenh", r"ghien mi go", r"la la school",
+    r"bam (nut )?chuong", r"like (va|and) share", r"nho like",
+    r"khong bo lo (nhung|cac) video", r"cam on (cac ban )?(da )?(theo doi|xem)",
+    r"hen gap lai (cac ban )?(trong|o) (nhung|cac) (video|clip)",
+    r"video (tiep theo|hap dan)", r"(phu de|vietsub|sub) (boi|by)", r"amara\.org",
+    r"subtitles? by", r"thanks? (you )?for watching", r"transcribed by",
+)
+_HALLU_RE = re.compile("|".join(HALLUCINATION_PATTERNS))
+
+
+def _fold(text):
+    """Bo dau tieng Viet + chu thuong (so khop mau cau ao khong phu thuoc dau)."""
+    t = unicodedata.normalize("NFD", (text or "").lower().replace("đ", "d"))
+    return re.sub(r"\s+", " ", "".join(c for c in t if unicodedata.category(c) != "Mn")).strip()
+
+
+def is_hallucination(text, allow=""):
+    """Cau co phai loi 'nghe ao' kinh dien khong. `allow`: van ban that (vd loi nguoi dung go)
+    — cum tu co san trong do thi KHONG tinh la ao (quang cao that co the noi 'dang ky kenh')."""
+    f = _fold(text)
+    if not f:
+        return False
+    fa = _fold(allow)
+    return any(m.group(0) not in fa for m in _HALLU_RE.finditer(f))
+
+
+def transcribe(model, path, language=None, progress=None, careful=False):
     """Phien am 1 file. `progress(giay_da_xu_ly, tong_giay)` goi theo tung segment.
 
     Uu tien batched inference + VAD (nhanh 2-4x, bo khoang lang, giam ao giac);
     tu fallback ve che do thuong neu moi truong thieu onnxruntime.
-    """
-    try:
-        from faster_whisper import BatchedInferencePipeline
-        segments, info = BatchedInferencePipeline(model).transcribe(
-            str(path), language=language, word_timestamps=True, batch_size=BATCH_SIZE)
-    except Exception:
-        try:
-            segments, info = model.transcribe(str(path), language=language,
-                                              word_timestamps=True, vad_filter=True)
-        except Exception:
-            segments, info = model.transcribe(str(path), language=language,
-                                              word_timestamps=True)
 
-    words, texts = [], []
+    careful=True (lay loi MAU GIONG): nghe tuan tu ca file, VAD, KHONG noi ngu canh cau truoc
+    (condition_on_previous_text=False -> 1 cau ao khong keo theo ca doan), bo cac segment la
+    cau ao kinh dien (subscribe / dang ky kenh...) -> tra them "dropped".
+    """
+    segments = None
+    if careful:
+        for kw in (dict(vad_filter=True, hallucination_silence_threshold=1.0), dict(vad_filter=True), {}):
+            try:
+                segments, info = model.transcribe(str(path), language=language, word_timestamps=True,
+                                                  condition_on_previous_text=False, beam_size=5, **kw)
+                break
+            except Exception:
+                continue
+        if segments is None:
+            raise RuntimeError("không nghe được file %s" % Path(path).name)
+    else:
+        try:
+            from faster_whisper import BatchedInferencePipeline
+            segments, info = BatchedInferencePipeline(model).transcribe(
+                str(path), language=language, word_timestamps=True, batch_size=BATCH_SIZE)
+        except Exception:
+            try:
+                segments, info = model.transcribe(str(path), language=language,
+                                                  word_timestamps=True, vad_filter=True)
+            except Exception:
+                segments, info = model.transcribe(str(path), language=language,
+                                                  word_timestamps=True)
+
+    words, texts, dropped = [], [], []
     for seg in segments:
+        if careful and is_hallucination(seg.text):
+            dropped.append({"start": round(seg.start, 2), "end": round(seg.end, 2),
+                            "text": seg.text.strip()})
+            continue
         texts.append(seg.text)
         for w in (seg.words or []):
             words.append({"text": w.word, "start": round(w.start, 3),
@@ -81,13 +132,16 @@ def transcribe(model, path, language=None, progress=None):
                           "p": round(float(getattr(w, "probability", 1.0) or 0.0), 3)})
         if progress and info.duration:
             progress(min(seg.end, info.duration), info.duration)
-    return {
+    out = {
         "text": "".join(texts).strip(),
         "words": words,
         "language_code": info.language,
         "language_probability": info.language_probability,
         "duration": round(info.duration, 2),
     }
+    if careful:
+        out["dropped"] = dropped
+    return out
 
 
 def fmt_ts(seconds):
