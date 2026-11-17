@@ -1205,6 +1205,38 @@ _VOX_EMO = {
     "lang man": "romantic, soft, warm",
 }
 
+# Muc Manh / Rat manh: mo ta kieu CHI DAO DIEN VIEN (do tren giong ha, 4 cam xuc: bien do cao do
+# 8.1 -> 11.2 = cam xuc ro hon that su, van dung chu 100%; giong 0.88 -> 0.86).
+_VOX_EMO_STRONG = {
+    "het": "shouting at full voice, explosive and intense, words hammered out",
+    "gian du": "furious and exasperated, sharp forceful voice, clipped words, rising intensity, scolding tone",
+    "hao hung": "thrilled and bursting with excitement, voice rising high, fast bright delivery, big smile in the voice, punchy emphasis on key words",
+    "kich tinh": "dramatic and gripping, building tension, strong contrasts between soft and loud, deliberate pauses",
+    "gap gap": "urgent and breathless, fast hurried delivery, tense rising pitch",
+    "ngac nhien": "genuinely shocked, gasping in disbelief, pitch jumping up sharply on questions, wide-eyed amazement",
+    "quang cao": "high-energy advertising host, bright and upbeat, big smile, punchy emphasis on product benefits",
+    "vui": "joyful and cheerful, smiling and laughing lightly while speaking, bright bouncy intonation",
+    "tinh nghich": "playful and teasing, mischievous little laugh, bouncy sing-song intonation",
+    "tu tin": "confident and assured, firm steady voice, clear strong emphasis, persuasive",
+    "tu hao": "proud and uplifted, warm strong voice, emphasis on achievements",
+    "so hai": "frightened and trembling, shaky breathless voice, hesitant, nervous gasps",
+    "lo lang": "anxious and worried, uneasy hesitant voice, tense, quick shallow breaths",
+    "nghen ngao": "choked up with emotion, voice cracking, holding back tears, broken pauses",
+    "nghiem tuc": "serious and grave, firm measured voice, deliberate weight on each key word",
+    "ke chuyen": "warm engaging storyteller, gentle rises and falls, drawing the listener in",
+    "lanh lung": "cold and detached, flat icy voice, slow and controlled",
+    "bi an": "mysterious and hushed, low secretive voice, slow with suspenseful pauses",
+    "buon": "grieving and heartbroken, voice low and trembling, slow with long sighing pauses, holding back tears",
+    "that vong": "deeply disappointed, deflated sinking voice, slow heavy sighs",
+    "tram ngam": "thoughtful and reflective, soft low voice, slow with contemplative pauses",
+    "binh tinh": "calm and soothing, relaxed gentle voice, unhurried",
+    "diu dang": "tender and loving, soft warm voice, gentle caring tone",
+    "nung niu": "sweet and affectionate, soft cutesy voice, gentle and pampering",
+    "met moi": "exhausted and drained, weary low voice, slow dragging words, tired sighs",
+    "thi tham": "whispering softly and intimately, breathy hushed voice, very close to the listener",
+    "lang man": "romantic and dreamy, soft warm intimate voice, lingering on words",
+}
+
 # GIONG DIEU THEO THE LOAI VIDEO: tong nen (cau khong gan the doc theo tong nay),
 # toc do, do ngat nghi giua cau, do bieu cam them cho Chatterbox.
 # "goi_y" dua cho AI bien kich biet the loai can gan the ra sao.
@@ -2447,10 +2479,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     # bang mau giong cho ro chu)
     vox_force = bool(use_vox and k_emo >= 1.3)
     if vox_force and vox_ctl:
-        calm = {"buon", "that vong", "tram ngam", "binh tinh", "diu dang", "nung niu", "met moi",
-                "thi tham", "lang man", "bi an", "lanh lung", "ke chuyen", "nghen ngao", "lo lang"}
-        vox_ctl = [(c + (", deeply emotional, expressive pauses" if _emo_name(segs[k]) in calm
-                         else ", strong emphasis, lively ups and downs")) if c else c
+        vox_ctl = [_VOX_EMO_STRONG.get(_emo_name(segs[k]), c) if c else c
                    for c, (k, _t, _s) in zip(vox_ctl, items)]
 
     def run(idx, prog=None, calm_down=0):
