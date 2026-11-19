@@ -812,9 +812,11 @@ def _make_ai_call(translate, rep):
 
 # ---- soat lai the AI gan: model nho (qwen2.5 3B) doi khi gan NGUOC nghia ----
 # (do: "Anh em ơi, tin được không!" -> [dịu dàng]; "Tiếc là hôm qua mình lỡ..." -> [nghi ngờ])
-_CUE_EXCITED = re.compile(r"(?i)(trời ơi|ôi trời|wow|tin được không|không thể tin|thật sao|thật á|"
+_CUE_EXCITED = re.compile(r"(?i)(trời ơi|ôi trời|wow|oh my god|can you believe|unbelievable|amazing|incredible|"
+                          r"no way|guess what|tin được không|không thể tin|thật sao|thật á|"
                           r"hả\?|á à|quá đã|tuyệt vời|đỉnh (quá|thật)|mua ngay|chốt đơn|ơi[,!]|!\s*$)")
-_CUE_SAD = re.compile(r"(?i)(tiếc là|đáng tiếc|tiếc quá|lỡ mất|bỏ lỡ|buồn|thất vọng|đau lòng|nhớ (ai|mẹ|"
+_CUE_SAD = re.compile(r"(?i)(unfortunately|sadly|i miss|heartbroken|never came back|passed away|"
+                      r"tiếc là|đáng tiếc|tiếc quá|lỡ mất|bỏ lỡ|buồn|thất vọng|đau lòng|nhớ (ai|mẹ|"
                       r"ba|bố|em|anh|người)|không còn nữa|ra đi|mất đi|cô đơn|nước mắt)")
 _CALM_TAGS = {"diu dang", "buon", "thi tham", "bi an", "met moi", "nghi ngo", "lanh lung", "binh tinh",
               "tram ngam", "that vong", "nung niu", "buon ngu", "ngai ngung"}
@@ -824,8 +826,11 @@ _HAPPY_TAGS = {"vui", "hao hung", "ngac nhien", "tu hao", "het", "quang cao", "t
 
 _CUE_CTA = re.compile(r"(?i)(đừng chần chừ|nhanh tay|số lượng (ưu đãi )?có hạn|chỉ còn|đặt hàng|mua ngay|chốt đơn|"
                       r"liên hệ (với chúng tôi )?ngay|inbox ngay|order (now|today)|buy now|đăng ký ngay|"
-                      r"ngay hôm nay|kẻo lỡ|đừng bỏ lỡ|hãy chọn ngay|sở hữu ngay|thử ngay)")
-_CUE_URGENT = re.compile(r"(?i)(đừng chần chừ|nhanh tay|có hạn|chỉ còn|kẻo lỡ|sắp hết|cuối cùng)")
+                      r"ngay hôm nay|kẻo lỡ|đừng bỏ lỡ|hãy chọn ngay|sở hữu ngay|thử ngay|"
+                      r"don't miss|shop now|get yours|sign up|subscribe now|limited (time|offer|stock)|act now|"
+                      r"while (stocks|supplies) last|call (us )?(now|today)|visit (our|us)|grab yours)")
+_CUE_URGENT = re.compile(r"(?i)(đừng chần chừ|nhanh tay|có hạn|chỉ còn|kẻo lỡ|sắp hết|cuối cùng|"
+                         r"limited|act now|hurry|last chance|while (stocks|supplies) last|ends (today|tonight))")
 _FLAT_TAGS = _CALM_TAGS | {"nghiem tuc", "nhe nhom", "tu tin", "tu hao", "ke chuyen", "binh thuong"}
 
 
@@ -834,8 +839,14 @@ def _fix_obvious_tags(text):
     [dịu dàng]/[nghi ngờ]... -> [ngạc nhiên] hoac [hào hứng]; cau tiec nuoi / buon ma gan the vui
     hoac [nghi ngờ] -> [buồn]. Chi sua khi trai nguoc ro, con lai giu nguyen y AI."""
     parts = re.split(r"(\[[^\]\n]{1,30}\])", text or "")
+    en_tags = any(_norm_tag(parts[k][1:-1]) in _EN_EMO for k in range(1, len(parts), 2))
+    en_name = {}
+    for k_en, v_c in _EN_EMO.items():
+        en_name.setdefault(v_c, k_en)
+    T = lambda vi, canon: ("[%s]" % en_name.get(canon, vi)) if en_tags else "[%s]" % vi
     for i in range(1, len(parts) - 1, 2):
         tag = _norm_tag(parts[i][1:-1])
+        tag = _EMO_CANON.get(tag, tag)          # the tieng Anh ([calm], [serious]) -> ten goc
         body = parts[i + 1]
         seg = re.split(r"(?<=[.!?…])\s+", body.strip())[0] if body.strip() else ""
         if not seg:
@@ -843,17 +854,18 @@ def _fix_obvious_tags(text):
         # "đừng bỏ lỡ" / "kẻo lỡ" la loi MOI MUA, khong phai tiec nuoi
         sad = _CUE_SAD.search(re.sub(r"(?i)(đừng|kẻo|chớ)\s+(bỏ\s+)?lỡ", "", seg))
         if tag in _CALM_TAGS and _CUE_EXCITED.search(seg) and not sad:
-            parts[i] = "[ngạc nhiên]" if re.search(r"\?|tin được|thật (sao|á)|hả|không thể tin", seg) else "[hào hứng]"
+            parts[i] = (T("ngạc nhiên", "ngac nhien") if re.search(r"(?i)\?|tin được|thật (sao|á)|hả|không thể tin|can you believe|no way", seg)
+                        else T("hào hứng", "hao hung"))
         elif (tag in _HAPPY_TAGS or tag == "nghi ngo") and sad and "!" not in seg:
-            parts[i] = "[buồn]"
+            parts[i] = T("buồn", "buon")
         elif tag in _FLAT_TAGS and _CUE_CTA.search(seg) and not sad:
             # cau CHOT DON / moi mua ma gan [nghiêm túc] / [dịu dàng]... -> nghe chan, het hon
-            parts[i] = "[gấp gáp]" if _CUE_URGENT.search(seg) else "[hào hứng]"
+            parts[i] = T("gấp gáp", "gap gap") if _CUE_URGENT.search(seg) else T("hào hứng", "hao hung")
     # cau hoi MO DAU khong co the (quang cao hay mo bang cau hoi goi to mo) -> [tinh nghịch]
     head = (parts[0] or "").strip()
     first = re.split(r"(?<=[.!?…])\s+", head)[0] if head else ""
-    if first.endswith("?") and re.search(r"(?i)\b(bạn|anh chị|các bạn|mọi người|you)\b", first):
-        parts[0] = re.sub(r"^(\s*)", r"\1[tinh nghịch] ", parts[0], count=1)
+    if first.endswith("?") and re.search(r"(?i)\b(bạn|anh chị|các bạn|mọi người|you|your)\b", first):
+        parts[0] = re.sub(r"^(\s*)", lambda m: m.group(1) + T("tinh nghịch", "tinh nghich") + " ", parts[0], count=1)
     return "".join(parts)
 
 
@@ -2536,8 +2548,11 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
         if len(parts) < 2:
             return None
         n = len(parts)
+        e1 = [round(max(0.3, exs[i] - 0.15), 3)] * n if exs else None      # Chatterbox: ro chu hon 1 nac
+        c1 = [round(min(0.7, cfgs[i] + 0.15), 3)] * n if cfgs else None
         got = clone.synth_cues_clone(parts, name, rate=base_rate, speeds=[speeds[i]] * n,
                                      styles=[styles[i]] * n if styles else None,
+                                     exaggerations=e1, cfgs=c1,
                                      vox_styles=[vox_ctl[i]] * n if vox_ctl else None, vox_force=False)
         if not all(got):
             return None
@@ -2562,7 +2577,7 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
                 break
             try:
                 again = run(bad, calm_down=_round + 1)
-                if use_vox and _round >= 1:
+                if (use_vox or use_cbx) and _round >= 1:
                     # lan doc lai thu 2 tro di van sai: thu them cach TACH CUM ngan, giu ban dung hon
                     for n_b, i in enumerate(bad):
                         try:

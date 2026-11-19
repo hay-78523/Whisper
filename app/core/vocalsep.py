@@ -60,6 +60,16 @@ def _load(path):
     return wav
 
 
+def _edition_no_sep():
+    """edition.json "music_sep": false (ban ca nhan chi tieng Anh) -> khong tai model ~320MB."""
+    try:
+        name = (os.environ.get("WHISPER_EDITION") or (ROOT / "editions" / "ACTIVE").read_text(encoding="utf-8")).strip()
+        ed = json.loads((ROOT / "editions" / name / "edition.json").read_text(encoding="utf-8"))
+        return ed.get("music_sep") is False
+    except Exception:
+        return False
+
+
 def _importable():
     import subprocess
     r = subprocess.run([sys.executable, "-c", "import demucs.apply, demucs.pretrained"],
@@ -133,6 +143,9 @@ def _main(argv):
     ap.add_argument("--install", action="store_true", help="cai thu vien (--no-deps) neu chua co")
     ap.add_argument("--prefetch", action="store_true", help="cai thu vien + tai san model (1 lan)")
     a = ap.parse_args(argv)
+    if a.prefetch and _edition_no_sep():
+        print("[i] Ban nay khong dung tach nhac nen -> bo qua tai model.")
+        return 0
     if a.check or a.install or a.prefetch:
         ok = _importable()
         if not ok and (a.install or a.prefetch):

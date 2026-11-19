@@ -5,5 +5,9 @@
   "personal": true,
   "voices": null,
   "en_voices": "all",
-  "mo_ta": "Ban CA NHAN 1 khach: giao dien Whisper, tu dang nhap tren may khach, them giong dung ngay."
+  "mo_ta": "Ban CA NHAN 1 khach: giao dien Whisper, tu dang nhap tren may khach, them giong dung ngay.",
+  "verify_model": "large-v3-turbo",
+  "verify_min": 1.0,
+  "verify_retry": 4,
+  "music_sep": false
 }
