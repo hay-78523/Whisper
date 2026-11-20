@@ -2335,7 +2335,22 @@ def _voiced_after(wav, t0):
     return float((rms > peak * 0.1).sum()) * 0.02
 
 
-def _verify_clips(texts, clips, english, model_name=None):
+def _note(progress, done, total, msg):
+    """Bao buoc dang lam len thanh tien do (callback cu chi nhan 2 tham so -> bo qua ghi chu)."""
+    if not progress:
+        return
+    try:
+        progress(done, total, note=msg)
+    except TypeError:
+        try:
+            progress(done, total)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _verify_clips(texts, clips, english, model_name=None, on_item=None):
     """Whisper nghe lai tung doan -> ti le khop chu (0..1). Loi nghe -> None (coi nhu dat).
     Doan co AM THUA sau tu cuoi cua kich ban (vd Chatterbox doc them "Send!") -> CAT bo
     ngay trong `clips` (sua tai cho) roi cham lai."""
@@ -2350,6 +2365,8 @@ def _verify_clips(texts, clips, english, model_name=None):
     out = []
     with _tf.TemporaryDirectory(prefix="verify_") as td:
         for i, (t, wav) in enumerate(zip(texts, clips)):
+            if on_item:
+                on_item(i, len(texts))
             if not wav:
                 out.append(0.0)
                 continue
@@ -2570,11 +2587,16 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
     # giu ban khop chu nhat. Tat: CLONE_VERIFY = False.
     if clone._cfg("CLONE_VERIFY", True):
         floor = float(clone._cfg("CLONE_VERIFY_MIN", 0.9))
-        score = _verify_clips(texts, clips, english)
-        for _round in range(int(clone._cfg("CLONE_VERIFY_RETRY", 3))):
+        n_all = len(texts)
+        n_round = int(clone._cfg("CLONE_VERIFY_RETRY", 3))
+        _note(progress, 0, n_all, "Kiểm tra đúng chữ khúc 1/%d…" % n_all)
+        score = _verify_clips(texts, clips, english, on_item=lambda k, n: _note(
+            progress, k, n, "Kiểm tra đúng chữ khúc %d/%d…" % (k + 1, n)))
+        for _round in range(n_round):
             bad = [i for i, sc in enumerate(score) if sc is not None and sc < floor]
             if not bad:
                 break
+            _note(progress, 0, len(bad), "Đọc lại %d khúc chưa chuẩn (lần %d/%d)…" % (len(bad), _round + 1, n_round))
             try:
                 again = run(bad, calm_down=_round + 1)
                 if (use_vox or use_cbx) and _round >= 1:
@@ -2591,11 +2613,13 @@ def synth_clone(text, voice, base_rate="+0%", progress=None, genre=None, intensi
                                 again[n_b] = alt
             except Exception:
                 break
-            new_sc = _verify_clips([texts[i] for i in bad], again, english)
+            new_sc = _verify_clips([texts[i] for i in bad], again, english, on_item=lambda k, n: _note(
+                progress, k, n, "Kiểm tra lại %d khúc vừa đọc (%d/%d)…" % (n, k + 1, n)))
             for i, wav, sc in zip(bad, again, new_sc):
                 if wav and (sc is None or sc > score[i]):
                     clips[i], score[i] = wav, sc
         VERIFY_LAST.update(n=len(score), low=[round(x, 2) for x in score if x is not None and x < floor])
+        _note(progress, n_all, n_all, "Ghép và hoàn thiện bản đọc…")
     by_seg = {}
     for (k, t, _sp), wav in zip(items, clips):
         s = segs[k]

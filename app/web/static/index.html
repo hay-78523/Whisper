@@ -1243,8 +1243,8 @@
         var jobId = res.j.job;
         pollJob(jobId, function (j) {
           var label = j.phase === 'translate' ? 'Dịch khúc ' : 'Tạo giọng khúc ';
-          st.innerHTML = barHtml(j) + '<span class="spinner"></span>' + label +
-            j.done + '/' + (j.total || '…') + etaText(j);
+          st.innerHTML = barHtml(j) + '<span class="spinner"></span>' + (j.note ? esc(j.note) :
+            label + j.done + '/' + (j.total || '…') + etaText(j));
         }, function (err, j) {
           tgo.disabled = false;
           if (err) { st.innerHTML = err.message; return; }

@@ -488,7 +488,8 @@ class Handler(BaseHTTPRequestHandler):
                 job = self._job_or_404(parsed.query)
                 if job:
                     body = {k: job[k] for k in
-                            ("state", "phase", "done", "total", "phase_started", "error")}
+                            ("state", "phase", "done", "total", "phase_started", "error", "note")
+                            if k in job}
                     if job["state"] == "done":
                         body["result"] = job["result"]
                     self._send(200, body)

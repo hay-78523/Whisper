@@ -61,7 +61,15 @@ class JobManager(object):
 
     @staticmethod
     def _set_phase(job, phase):
-        job.update(phase=phase, done=0, total=0, phase_started=time.time())
+        job.update(phase=phase, done=0, total=0, phase_started=time.time(), note=None)
+
+    @staticmethod
+    def _prog(job):
+        """Callback tien do: (done, total) + ghi chu buoc dang lam (vd 'Kiểm tra đúng chữ khúc 3/35')
+        -> thanh tien do khong dung im o 35/35 trong luc tu kiem tra / doc lai."""
+        def cb(d, t, note=None):
+            job.update(done=d, total=t, note=note)
+        return cb
 
     def _finish(self, job, error=None):
         job["finished"] = time.time()
@@ -274,7 +282,7 @@ class JobManager(object):
                     self._set_phase(job, "translate")
                     trans = translate.translate_cues(
                         [c["text"] for c in cues], target,
-                        progress=lambda d, t: job.update(done=d, total=t))
+                        progress=self._prog(job))
                     engine_label = translate.LAST_ENGINE
                 else:
                     trans = [c["text"] for c in cues]
@@ -332,11 +340,11 @@ class JobManager(object):
                 self._set_phase(job, "tts")
                 clips = tts.synth_cues(
                     final_texts, voice, rate,
-                    progress=lambda d, t: job.update(done=d, total=t))
+                    progress=self._prog(job))
                 self._set_phase(job, "assemble")
                 audio_bytes = video.assemble_aligned(
                     cues, clips, total_s, out_audio,
-                    progress=lambda d, t: job.update(done=d, total=t))
+                    progress=self._prog(job))
                 job.update(audio=audio_bytes, mime="audio/mp4")
                 if is_video:
                     self._set_phase(job, "mux")
@@ -447,7 +455,7 @@ class JobManager(object):
                     self._set_phase(job, "tts")
                     data, mime = expressive.synth_expressive_gemini(
                         text, voice.split(":", 1)[1], target=target,
-                        progress=lambda d, t: job.update(done=d, total=t))
+                        progress=self._prog(job))
                     job.update(audio=data, mime=mime)
                     job["result"] = {"translated": None, "mime": mime,
                                      "chars": len(text), "expressive": True}
@@ -457,7 +465,7 @@ class JobManager(object):
                     self._set_phase(job, "tts")
                     data, mime = expressive.synth_expressive(
                         text, voice, rate, target=target,
-                        progress=lambda d, t: job.update(done=d, total=t))
+                        progress=self._prog(job))
                     job.update(audio=data, mime=mime)
                     job["result"] = {"translated": None, "mime": mime,
                                      "chars": len(text), "expressive": True}
@@ -473,7 +481,7 @@ class JobManager(object):
                     rep = {}
                     try:
                         script, auto_note = expressive.auto_annotate(
-                            text, progress=lambda d, t: job.update(done=d, total=t),
+                            text, progress=self._prog(job),
                             report=rep, genre=genre)
                         job["auto_script"], job["auto_genre"] = script, rep.get("genre")
                     except Exception as e:
@@ -483,17 +491,17 @@ class JobManager(object):
                     self._set_phase(job, "translate")
                     current = translate.translate_text(
                         current, target,
-                        progress=lambda d, t: job.update(done=d, total=t))
+                        progress=self._prog(job))
                     job["translated"] = current
                 self._set_phase(job, "tts")
                 if voice.startswith("edge:"):     # doc "nhu nguoi" — het deu deu robot
                     data, mime = expressive.synth_human(
                         current, voice, rate,
-                        progress=lambda d, t: job.update(done=d, total=t))
+                        progress=self._prog(job))
                 else:
                     data, mime, _ = tts.synth(
                         current, voice, rate,
-                        progress=lambda d, t: job.update(done=d, total=t),
+                        progress=self._prog(job),
                         genre=(genre or job.get("auto_genre")) if keep_tags else None,
                         intensity=intensity if keep_tags else None)
                 job.update(audio=data, mime=mime)
@@ -534,7 +542,7 @@ class JobManager(object):
                 rep = {}
                 out, note = expressive.auto_annotate(
                     text, target,
-                    progress=lambda d, t: job.update(done=d, total=t), report=rep,
+                    progress=self._prog(job), report=rep,
                     genre=genre)
                 job["result"] = {"text": out, "note": note, "report": rep}
                 self._finish(job)
@@ -553,7 +561,7 @@ class JobManager(object):
             try:
                 self._set_phase(job, "download")
                 clone.ensure_assets(
-                    progress=lambda d, t: job.update(done=d, total=t),
+                    progress=self._prog(job),
                     log=lambda m: (lines.append(m), job.update(log=lines[-6:])),
                     force=force)
                 job["result"] = {"assets": clone.clone_assets.state()}
