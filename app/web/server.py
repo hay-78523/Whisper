@@ -31,6 +31,7 @@ API nhan ban giong (Voice Clone — tinh nang chinh):
     POST /api/admin/clone_stop                 tat engine, giai phong RAM
     POST /api/admin/clone_add?name=&ref_text=  (body = file mau) tao giong
     POST /api/admin/clone_sample {name,text?}  tao ban nghe thu
+    POST /api/admin/clone_ref_text {name,text}  sua loi mau (Whisper nghe sai) -> tao lai nghe thu
     POST /api/admin/clone_delete {name}           (tu choi giong cho duyet = xoa)
     POST /api/admin/clone_approve {name}          duyet giong nhan vien gui (chi tren may chu)
     POST /api/clone_add?name=...                  may chu+admin: tao ngay; con lai: gui cho duyet
@@ -693,6 +694,12 @@ class Handler(BaseHTTPRequestHandler):
                 s = self._require("admin")
                 if s and self._require_host_admin(s):
                     self._handle_clone_add(s)
+            elif route == "/api/admin/clone_ref_text":
+                s = self._require("admin")
+                if s and self._require_host_admin(s):
+                    b = self._json_body()
+                    self._send(200, {"ok": True, "profile": clone.set_ref_text(str(b.get("name", "")),
+                                                                               str(b.get("text", "")))})
             elif route == "/api/admin/clone_delete":
                 s = self._require("admin")
                 if s and self._require_host_admin(s):

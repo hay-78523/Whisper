@@ -832,6 +832,27 @@
       });
       cell.appendChild(play);
 
+      if (CL.canAddVoice && p.state !== 'processing') {
+        var fix = document.createElement('button');
+        fix.className = 'btn';
+        fix.style.marginRight = '8px';
+        fix.textContent = 'Sửa lời mẫu';
+        fix.title = 'Whisper nghe gần đúng (vd "chiếc suốt" thay vì "chiết xuất")? Sửa cho khớp chữ trong đoạn mẫu — tool tạo lại file nghe thử';
+        fix.addEventListener('click', function () {
+          var t = window.prompt('Lời mẫu của giọng ' + p.name + ' (sửa cho ĐÚNG từng chữ người nói trong đoạn mẫu):', p.ref_text || '');
+          if (t === null || !t.trim() || t.trim() === (p.ref_text || '').trim()) return;
+          fix.disabled = true; fix.textContent = 'Đang lưu…';
+          fetch('/api/admin/clone_ref_text', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: p.name, text: t.trim() })
+          }).then(function (r) { return r.json(); }).then(function (j) {
+            if (j.error) alert(j.error);
+            loadClones();
+          }).catch(function () { fix.disabled = false; fix.textContent = 'Sửa lời mẫu'; });
+        });
+        cell.appendChild(fix);
+      }
+
       var noEmo = (p.styles || []).indexOf('hype') < 0 && (p.styles || []).indexOf('calm') < 0;
       if (CL.canAddVoice && noEmo) {
         var mk = document.createElement('button');

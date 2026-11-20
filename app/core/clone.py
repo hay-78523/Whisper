@@ -938,7 +938,8 @@ def _smart_ref(name):
                ref_text_source="tự chọn đoạn hay nhất từ file %.0fs" % (len(y) / refpick.SR),
                styles=styles, ref_wpm=round(m["wpm"]), ref_snr=round(m.get("snr", 10.0), 1),
                ref_foreign=m.get("foreign", 0),
-               ref_window=[round(m["t0"], 2), round(m["t1"], 2)], ref_cands=cands)
+               ref_window=[round(m["t0"], 2), round(m["t1"], 2)], ref_cands=cands,
+               ref_score=m.get("score"))
     return True
 
 
@@ -1386,8 +1387,16 @@ def _improve_similarity(name, say=None):
             # ban doc thu cua doan cu doc SAI chu (< 95%) ma doan nay doc dung + van giong giong -> lay
             fixes_text = (match is not None and match >= m_min and sim is not None and sim >= sim_ok
                           and (best["match"] or 0) < m_min)
+            # doan ung vien KEM CHAT LUONG hon doan dang dung (ngan han, nhieu chu nuoc ngoai / ten
+            # thuong hieu, khong tron cau -> refpick cham diem thap): chi doi khi giong giong hon RO
+            # (do: Ngoc Van tu doi tu doan 8.4s thuan Viet sang doan 5.3s co 'Senka Berry' chi vi
+            # giong giong nhinh hon chut it)
+            q_cur = m.get("ref_score")
+            worse = ((q_cur is not None and c.get("score") is not None and c["score"] < q_cur - 0.3)
+                     or (c.get("dur", 99) < 6.0 and float(m.get("duration") or 0) >= 6.5))
+            need = 0.03 if worse else 0.005
             if fixes_text or (sim is not None and sim >= min(best["sim"], floor) and ok_text
-                              and total(sim, pc) > total(best["sim"], best["pc"]) + 0.005):
+                              and total(sim, pc) > total(best["sim"], best["pc"]) + need):
                 best = {"sim": sim, "match": match, "pc": pc}
                 _save_meta(name, ref_window=[c["t0"], c["t1"]], duration=c["dur"],
                            ref_wpm=c["wpm"], ref_text_source="tự chọn đoạn GIỐNG GIỌNG + NHỊP "
@@ -1402,6 +1411,32 @@ def _improve_similarity(name, say=None):
     finally:
         shutil.rmtree(bak, ignore_errors=True)
     return best["sim"]
+
+
+def set_ref_text(name, text):
+    """Nguoi dung SUA LOI MAU (Whisper nghe gan dung: 'chiếc suốt' -> 'chiết xuất'): ghi ref.txt
+    roi tao lai file nghe thu + tu kiem tra o nen — lam duoc dung nhu ky thuat chinh tay."""
+    name = safe_name(name)
+    d = profile_dir(name)
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    if not (d / "ref.wav").exists():
+        raise ValueError("Không có giọng '%s'." % name)
+    if len(text) < 5:
+        raise ValueError("Lời mẫu quá ngắn.")
+    (d / "ref.txt").write_text(text, encoding="utf-8")
+    _save_meta(name, ref_text_source="người dùng (sửa lời mẫu)", user_text=text, user_text_check=None,
+               state="processing", stage="tạo lại file nghe thử theo lời mẫu mới…", error=None)
+
+    def bg():
+        try:
+            make_sample(name)
+            _sample_check(name)
+        except Exception as e:
+            _save_meta(name, sample_error=str(e)[:300])
+        finally:
+            _save_meta(name, state="ready", stage=None)
+    threading.Thread(target=bg, daemon=True).start()
+    return profile_info(name)
 
 
 def _finish_profile(name):
