@@ -1,0 +1,90 @@
+STARLIGHT VOICE STUDIO - HUONG DAN CAI DAT BAN DOANH NGHIEP (MAY CHU + MAY TRAM LAN)
+======================================================================================
+
+MO HINH: 1 MAY CHU (co card NVIDIA, chay phan mem) + cac MAY TRAM trong cung mang noi bo
+(chi can trinh duyet, KHONG cai gi). Toi da 3 tai khoan nhan vien + 1 tai khoan quan tri.
+
+----------------------------------------------------------------------------
+A. CHUAN BI MAY CHU
+----------------------------------------------------------------------------
+  * Windows 10/11 64-bit, card NVIDIA (khuyen RTX 4060 8GB tro len), RAM 16GB.
+  * O dia trong >= 25GB (goi giai nen ~8GB + tai them lan dau ~6GB + giong, ket qua).
+  * Co mang Internet o LAN DAU cai (de tai model). Sau do chay duoc khong can Internet.
+  * Cam day mang / Wi-Fi cung mang voi cac may tram.
+
+----------------------------------------------------------------------------
+B. CAI MAY CHU (1 lan)
+----------------------------------------------------------------------------
+1. Giai nen TOAN BO file 2_StarlightVoice_DoanhNghiep.zip bang WinRAR / 7-Zip ra thu muc
+   ngan, vi du  D:\Starlight   (KHONG chay truc tiep trong file zip, KHONG de o Desktop).
+2. Bam dup  Start-Windows.bat.  LAN DAU tool tu tai (can mang, ~30-60 phut tuy mang):
+     - PyTorch ban GPU (~3GB)                 -> chay bang card NVIDIA
+     - AI bien kich (Ollama + model, ~3.4GB)  -> cua so "AI local" rieng, tu dong khi xong
+     - Model tach nhac nen (~320MB)           -> cua so "Tach nhac nen" rieng
+     - Whisper large-v3-turbo (~1.6GB)        -> tai o lan long tieng dau tien (tu kiem tra chu)
+   Co dong canh bao "huggingface_hub ... symlinks" la BINH THUONG, khong phai loi.
+3. Windows hien hop "Windows Defender Firewall ... Allow access":
+     tick "Private networks" -> bam  Allow access.   (Khong cho phep = may tram KHONG vao duoc.)
+4. Cua so den hien:
+       May chu (Host)    : http://127.0.0.1:8765
+       Trang Quan tri    : http://127.0.0.1:8765/admin
+       May tram LAN      : http://192.168.x.x:8765      <- GHI LAI dia chi nay cho may tram
+   Trinh duyet tu mo trang dang nhap.
+5. Dang nhap tai khoan  admin  (mat khau da ban giao). Vao /admin doi mat khau ngay.
+
+----------------------------------------------------------------------------
+C. TAO TAI KHOAN NHAN VIEN
+----------------------------------------------------------------------------
+  /admin > "Quan ly tai khoan & Phien lam viec" > them tai khoan (ten + mat khau, vai tro
+  nhan vien). Toi da 3 nhan vien. Giao ten + mat khau cho tung nguoi.
+
+----------------------------------------------------------------------------
+D. MAY TRAM (nhan vien) - KHONG CAI GI
+----------------------------------------------------------------------------
+  Mo Chrome / Edge -> go dia chi  http://192.168.x.x:8765  (dia chi o buoc B4) -> dang nhap
+  tai khoan nhan vien. Nen luu dia chi vao Bookmark.
+  Nhan vien: soan kich ban, AI gan cam xuc, tao giong doc, tai file; GUI giong moi cho quan tri
+  duyet (giong chi duoc them / xoa / duyet tren MAY CHU).
+
+----------------------------------------------------------------------------
+E. GIU MAY CHU HOAT DONG
+----------------------------------------------------------------------------
+  * KHONG dong cua so den (dong = tat phan mem, may tram mat ket noi).
+  * Tat che do ngu: Settings > System > Power > Sleep = Never (khi dang lam viec).
+  * Moi lan bat may: bam dup Start-Windows.bat (cac lan sau KHONG tai lai gi).
+  * Dia chi 192.168.x.x co the DOI khi khoi dong lai modem/router -> may tram vao lai theo dia
+    chi moi o cua so den. Muon co dinh: nho ky thuat dat "IP tinh" (DHCP reservation) cho may chu
+    tren router.
+
+----------------------------------------------------------------------------
+F. THEM GIONG MOI (tren MAY CHU, tai khoan admin)
+----------------------------------------------------------------------------
+  1. File 1-3 phut, 1 nguoi noi, ro tieng (co nhac nen van duoc - tool tu tach nhac).
+     Co ca doan soi noi + doan tram thi cam xuc that hon.
+  2. /admin > Voice Clone > chon file / video > dat ten > Them (de TRONG o loi mau).
+     Tool tu: tach nhac, chon doan mau tron cau, nghe loi mau, tao file nghe thu, kiem tra.
+  3. Xong: doc dong loi mau canh giong. Chu nao sai (vd "chiec suot" thay vi "chiet xuat")
+     -> bam "Sua loi mau", sua cho dung, Luu -> tool tu tao lai file nghe thu.
+  4. Bam "Nghe thu". Giong giong < 80% hoac doc thu < 95% -> nen dung file khac.
+  Giong nhan vien gui tu may tram: /admin > "Giong nhan vien gui - Cho duyet" > Duyet / Tu choi.
+
+----------------------------------------------------------------------------
+G. LONG TIENG (may chu hoac may tram)
+----------------------------------------------------------------------------
+  Chon giong (nhom "Giong nhan ban - Tieng Viet") > dan kich ban > chon "Muc dich / the loai"
+  > bam "AI gan cam xuc" (xem / sua the) > "Do cam xuc" (Manh = nhieu cam xuc) > Tao giong doc.
+  Thanh tien do: doc tung khuc -> "Kiem tra dung chu khuc ..." -> "Doc lai ... khuc chua chuan"
+  -> "Ghep va hoan thien". Tool tu doc lai cau sai den khi dung chu, nen kich ban dai can cho.
+
+----------------------------------------------------------------------------
+H. KHI CO LOI
+----------------------------------------------------------------------------
+  Chup man hinh cua so den + gui ky thuat cac file:
+     data\logs\clone_worker.log      (tao giong)
+     data\logs\ai_bien_kich.log      (AI gan cam xuc)
+  May tram khong vao duoc: kiem tra may chu dang chay, dung dia chi 192.168.x.x moi nhat,
+  cung mang Wi-Fi/LAN, Firewall da "Allow" (Control Panel > Windows Defender Firewall >
+  Allow an app > python.exe tick Private).
+
+BAN TEST (3_StarlightVoice_BanTest.zip): cai giong het, them 1 buoc: sau buoc B2 bam dup
+Cai-VoxCPM2.bat (tai ~5GB, 1 lan) -> giong doc bang VoxCPM2 (Anh + Viet).

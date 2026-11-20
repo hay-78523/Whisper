@@ -37,5 +37,9 @@
   "footer": false,
   "verify_model": "large-v3-turbo",
   "verify_min": 1.0,
-  "verify_retry": 4
+  "verify_retry": 4,
+  "lan": true,
+  "extra_files": [
+    "HUONG-DAN-DOANH-NGHIEP.txt"
+  ]
 }

@@ -39,7 +39,9 @@ PERSONAL_MODE = (os.environ.get("WHISPER_PERSONAL") == "1"
                  or (_Path(__file__).resolve().parents[1] / "PERSONAL").is_file())
 
 # --- Web server ---
-DEFAULT_HOST = "127.0.0.1"   # doi thanh "0.0.0.0" khi can truy cap tu may khac trong LAN
+# Ban doanh nghiep (edition.json "lan": true): may chu mo cho may tram trong mang LAN (co dang nhap).
+# Ban ca nhan: chi may nay.
+DEFAULT_HOST = "0.0.0.0" if EDITION.get("lan") else "127.0.0.1"
 DEFAULT_PORT = 8765
 
 # --- Dang nhap ---

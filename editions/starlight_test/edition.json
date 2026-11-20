@@ -39,10 +39,12 @@
   "clone_engine": "voxcpm",
   "extra_files": [
     "setup_voxcpm.py",
-    "Cai-VoxCPM2.bat"
+    "Cai-VoxCPM2.bat",
+    "HUONG-DAN-DOANH-NGHIEP.txt"
   ],
   "footer": false,
   "verify_model": "large-v3-turbo",
   "verify_min": 1.0,
-  "verify_retry": 4
+  "verify_retry": 4,
+  "lan": true
 }
