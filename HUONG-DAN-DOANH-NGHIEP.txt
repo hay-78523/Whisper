@@ -1,19 +1,24 @@
-STARLIGHT VOICE STUDIO - HUONG DAN CAI DAT BAN DOANH NGHIEP (MAY CHU + MAY TRAM LAN)
+STARLIGHT VOICE STUDIO - HUONG DAN CAI DAT BAN DOANH NGHIEP (MANG LAN NOI BO)
 ======================================================================================
 
-MO HINH: 1 MAY CHU (co card NVIDIA, chay phan mem) + cac MAY TRAM trong cung mang noi bo
-(chi can trinh duyet, KHONG cai gi). Toi da 3 tai khoan nhan vien + 1 tai khoan quan tri.
+MO HINH 3 LOAI MAY (cung mang noi bo):
+  * MAY XU LY : may CO card NVIDIA (khuyen RTX 4060 8GB+), RAM 16GB. CAI phan mem o day,
+                lam toan bo viec nang (tao giong, kiem tra chu, AI gan cam xuc, tach nhac).
+  * MAY QUAN TRI (vd may chu cong ty, khong can card): chi mo trinh duyet, dang nhap admin ->
+                quan ly tai khoan, DUYET giong nhan vien gui, them / xoa giong.
+  * MAY NHAN VIEN: chi mo trinh duyet (KHONG cai gi). Toi da 3 tai khoan nhan vien.
+  May KHONG co card NVIDIA (vd Core i5 RAM 8GB) KHONG nen lam MAY XU LY: chay bang CPU rat cham,
+  thieu RAM. Cho no lam MAY QUAN TRI.
 
 ----------------------------------------------------------------------------
-A. CHUAN BI MAY CHU
+A. CHUAN BI MAY XU LY
 ----------------------------------------------------------------------------
-  * Windows 10/11 64-bit, card NVIDIA (khuyen RTX 4060 8GB tro len), RAM 16GB.
-  * O dia trong >= 25GB (goi giai nen ~8GB + tai them lan dau ~6GB + giong, ket qua).
-  * Co mang Internet o LAN DAU cai (de tai model). Sau do chay duoc khong can Internet.
-  * Cam day mang / Wi-Fi cung mang voi cac may tram.
+  * Windows 10/11 64-bit, card NVIDIA, RAM 16GB, o dia trong >= 25GB.
+  * Co Internet o LAN DAU cai (tai model). Sau do chay duoc khong can Internet.
+  * Nen dat IP CO DINH cho may nay tren router (DHCP reservation) de may khac khong phai doi dia chi.
 
 ----------------------------------------------------------------------------
-B. CAI MAY CHU (1 lan)
+B. CAI MAY XU LY (1 lan)
 ----------------------------------------------------------------------------
 1. Giai nen TOAN BO file 2_StarlightVoice_DoanhNghiep.zip bang WinRAR / 7-Zip ra thu muc
    ngan, vi du  D:\Starlight   (KHONG chay truc tiep trong file zip, KHONG de o Desktop).
@@ -24,13 +29,25 @@ B. CAI MAY CHU (1 lan)
      - Whisper large-v3-turbo (~1.6GB)        -> tai o lan long tieng dau tien (tu kiem tra chu)
    Co dong canh bao "huggingface_hub ... symlinks" la BINH THUONG, khong phai loi.
 3. Windows hien hop "Windows Defender Firewall ... Allow access":
-     tick "Private networks" -> bam  Allow access.   (Khong cho phep = may tram KHONG vao duoc.)
+     tick "Private networks" -> bam  Allow access.   (Khong cho phep = may khac KHONG vao duoc.)
 4. Cua so den hien:
        May chu (Host)    : http://127.0.0.1:8765
        Trang Quan tri    : http://127.0.0.1:8765/admin
-       May tram LAN      : http://192.168.x.x:8765      <- GHI LAI dia chi nay cho may tram
+       May tram LAN      : http://192.168.x.x:8765      <- GHI LAI dia chi nay
    Trinh duyet tu mo trang dang nhap.
 5. Dang nhap tai khoan  admin  (mat khau da ban giao). Vao /admin doi mat khau ngay.
+
+----------------------------------------------------------------------------
+B2. KHAI BAO MAY QUAN TRI (1 lan, lam TAI may xu ly)
+----------------------------------------------------------------------------
+1. Tren MAY QUAN TRI: mo trinh duyet vao  http://192.168.x.x:8765/admin  (dia chi buoc B4),
+   dang nhap admin. Muc "May quan tri" hien  "IP may nay: 192.168.1.20"  -> ghi lai IP do.
+   (Hoac mo Command Prompt go  ipconfig  -> dong IPv4 Address.)
+2. Tren MAY XU LY: /admin > "Quan ly tai khoan & Phien lam viec" > o "May quan tri" > nhap IP
+   vua ghi (nhieu may: cach nhau dau phay) > Luu.
+3. Tai lai trang /admin tren MAY QUAN TRI: hien "dang la MAY QUAN TRI" -> tu day quan ly, duyet
+   giong, them / xoa giong ngay tren may quan tri.
+   Nen dat IP co dinh cho ca may quan tri (IP doi thi phai khai bao lai o buoc 2).
 
 ----------------------------------------------------------------------------
 C. TAO TAI KHOAN NHAN VIEN
@@ -39,25 +56,25 @@ C. TAO TAI KHOAN NHAN VIEN
   nhan vien). Toi da 3 nhan vien. Giao ten + mat khau cho tung nguoi.
 
 ----------------------------------------------------------------------------
-D. MAY TRAM (nhan vien) - KHONG CAI GI
+D. MAY NHAN VIEN - KHONG CAI GI
 ----------------------------------------------------------------------------
   Mo Chrome / Edge -> go dia chi  http://192.168.x.x:8765  (dia chi o buoc B4) -> dang nhap
   tai khoan nhan vien. Nen luu dia chi vao Bookmark.
   Nhan vien: soan kich ban, AI gan cam xuc, tao giong doc, tai file; GUI giong moi cho quan tri
-  duyet (giong chi duoc them / xoa / duyet tren MAY CHU).
+  duyet (giong chi duoc them / xoa / duyet tren MAY XU LY hoac MAY QUAN TRI).
 
 ----------------------------------------------------------------------------
-E. GIU MAY CHU HOAT DONG
+E. GIU MAY XU LY HOAT DONG
 ----------------------------------------------------------------------------
-  * KHONG dong cua so den (dong = tat phan mem, may tram mat ket noi).
+  * KHONG dong cua so den tren MAY XU LY (dong = tat phan mem, moi may mat ket noi).
   * Tat che do ngu: Settings > System > Power > Sleep = Never (khi dang lam viec).
   * Moi lan bat may: bam dup Start-Windows.bat (cac lan sau KHONG tai lai gi).
-  * Dia chi 192.168.x.x co the DOI khi khoi dong lai modem/router -> may tram vao lai theo dia
-    chi moi o cua so den. Muon co dinh: nho ky thuat dat "IP tinh" (DHCP reservation) cho may chu
-    tren router.
+  * Dia chi 192.168.x.x co the DOI khi khoi dong lai modem/router -> cac may vao lai theo dia
+    chi moi o cua so den. Muon co dinh: nho ky thuat dat "IP tinh" (DHCP reservation) cho MAY XU
+    LY va MAY QUAN TRI tren router.
 
 ----------------------------------------------------------------------------
-F. THEM GIONG MOI (tren MAY CHU, tai khoan admin)
+F. THEM GIONG MOI (tren MAY QUAN TRI hoac MAY XU LY, tai khoan admin)
 ----------------------------------------------------------------------------
   1. File 1-3 phut, 1 nguoi noi, ro tieng (co nhac nen van duoc - tool tu tach nhac).
      Co ca doan soi noi + doan tram thi cam xuc that hon.
@@ -69,7 +86,7 @@ F. THEM GIONG MOI (tren MAY CHU, tai khoan admin)
   Giong nhan vien gui tu may tram: /admin > "Giong nhan vien gui - Cho duyet" > Duyet / Tu choi.
 
 ----------------------------------------------------------------------------
-G. LONG TIENG (may chu hoac may tram)
+G. LONG TIENG (bat ky may nao, qua trinh duyet)
 ----------------------------------------------------------------------------
   Chon giong (nhom "Giong nhan ban - Tieng Viet") > dan kich ban > chon "Muc dich / the loai"
   > bam "AI gan cam xuc" (xem / sua the) > "Do cam xuc" (Manh = nhieu cam xuc) > Tao giong doc.
@@ -82,9 +99,10 @@ H. KHI CO LOI
   Chup man hinh cua so den + gui ky thuat cac file:
      data\logs\clone_worker.log      (tao giong)
      data\logs\ai_bien_kich.log      (AI gan cam xuc)
-  May tram khong vao duoc: kiem tra may chu dang chay, dung dia chi 192.168.x.x moi nhat,
+  May khac khong vao duoc: kiem tra may xu ly dang chay, dung dia chi 192.168.x.x moi nhat,
   cung mang Wi-Fi/LAN, Firewall da "Allow" (Control Panel > Windows Defender Firewall >
   Allow an app > python.exe tick Private).
+  May quan tri bi bao "chi duoc thuc hien tren may chu": IP may quan tri da doi -> khai bao lai (B2).
 
 BAN TEST (3_StarlightVoice_BanTest.zip): cai giong het, them 1 buoc: sau buoc B2 bam dup
 Cai-VoxCPM2.bat (tai ~5GB, 1 lan) -> giong doc bang VoxCPM2 (Anh + Viet).

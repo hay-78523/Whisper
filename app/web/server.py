@@ -31,6 +31,7 @@ API nhan ban giong (Voice Clone — tinh nang chinh):
     POST /api/admin/clone_stop                 tat engine, giai phong RAM
     POST /api/admin/clone_add?name=&ref_text=  (body = file mau) tao giong
     POST /api/admin/clone_sample {name,text?}  tao ban nghe thu
+    POST /api/admin/admin_hosts {hosts:"ip1, ip2"}  may quan tri tu xa (chi sua tai may xu ly)
     POST /api/admin/clone_ref_text {name,text}  sua loi mau (Whisper nghe sai) -> tao lai nghe thu
     POST /api/admin/clone_delete {name}           (tu choi giong cho duyet = xoa)
     POST /api/admin/clone_approve {name}          duyet giong nhan vien gui (chi tren may chu)
@@ -135,6 +136,18 @@ def _active_sessions():
     return sorted(out, key=lambda x: -x["last_seen"])
 
 
+_ADMIN_HOSTS_FILE = Path(__file__).resolve().parents[2] / "data" / "admin_hosts.json"
+
+
+def admin_hosts():
+    """IP cac MAY QUAN TRI (vd may chu i5 khong co GPU) duoc quyen quan tri / duyet giong nhu
+    ngoi tai may xu ly. Chi sua duoc khi ngoi TAI may xu ly."""
+    try:
+        return [str(x).strip() for x in json.loads(_ADMIN_HOSTS_FILE.read_text(encoding="utf-8")) if str(x).strip()]
+    except Exception:
+        return []
+
+
 def _local_host_ips():
     """Tap hop IP cua chinh may chu (loopback + IP LAN tren card mang may chu)."""
     ips = {"127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1", "0:0:0:0:0:0:0:1"}
@@ -156,7 +169,20 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- tien ich ----------
 
+    def _peer_ip(self):
+        peer = (self.client_address[0] if self.client_address else "").strip()
+        return peer[7:] if peer.startswith("::ffff:") else peer
+
     def _is_host_request(self):
+        """May xu ly (Host) HOAC may quan tri da khai bao (admin_hosts) -> duoc quan tri / duyet."""
+        if self._is_real_host_request():
+            return True
+        if config.PERSONAL_MODE:
+            return False
+        xff = (self.headers.get("X-Forwarded-For") or "").strip()
+        return not xff and self._peer_ip() in set(admin_hosts())
+
+    def _is_real_host_request(self):
         """Kiem tra yeu cau HTTP co xuat phat truc tiep tu may chu (Host) hay khong."""
         host_ips = _local_host_ips()
         try:
@@ -187,7 +213,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(403, {"error": "Chỉ tài khoản Quản trị trên máy chủ mới được phép thêm hoặc xóa giọng mẫu."})
             return False
         if not self._is_host_request():
-            self._send(403, {"error": "Chức năng thêm/xóa giọng mẫu chỉ được thực hiện trực tiếp trên máy chủ (Host)."})
+            self._send(403, {"error": "Chức năng này chỉ làm được trên máy xử lý hoặc MÁY QUẢN TRỊ đã khai báo "
+                                      "(/admin > Máy quản trị, sửa tại máy xử lý). IP máy này: %s" % self._peer_ip()})
             return False
         return True
 
@@ -411,6 +438,9 @@ class Handler(BaseHTTPRequestHandler):
                     "user": s["user"],
                     "role": s["role"],
                     "is_host": is_host,
+                    "is_real_host": self._is_real_host_request(),
+                    "your_ip": self._peer_ip(),
+                    "admin_hosts": admin_hosts() if s["role"] == "admin" else [],
                     "can_add_voice": bool(is_host and s["role"] == "admin"),
                     # may tram / nhan vien: gui giong len -> cho Quan tri tren may chu duyet
                     "can_submit_voice": True,
@@ -694,6 +724,18 @@ class Handler(BaseHTTPRequestHandler):
                 s = self._require("admin")
                 if s and self._require_host_admin(s):
                     self._handle_clone_add(s)
+            elif route == "/api/admin/admin_hosts":
+                s = self._require("admin")
+                if s:
+                    if not self._is_real_host_request():
+                        raise ValueError("Chỉ sửa danh sách máy quản trị khi ngồi TẠI máy xử lý (máy chạy phần mềm).")
+                    ips = [x.strip() for x in str(self._json_body().get("hosts", "")).replace(";", ",").split(",") if x.strip()]
+                    import ipaddress
+                    for x in ips:
+                        ipaddress.ip_address(x)          # sai dinh dang -> ValueError
+                    _ADMIN_HOSTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    _ADMIN_HOSTS_FILE.write_text(json.dumps(ips), encoding="utf-8")
+                    self._send(200, {"ok": True, "hosts": ips})
             elif route == "/api/admin/clone_ref_text":
                 s = self._require("admin")
                 if s and self._require_host_admin(s):

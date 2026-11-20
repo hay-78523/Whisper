@@ -123,6 +123,14 @@
       <button class="btn" id="nu_add">Tạo tài khoản</button>
       <span id="nu_msg" class="muted" style="font-size:12px"></span>
     </div>
+
+    <div style="margin-top:16px; font-size:13px; font-weight:700">Máy quản trị (quản lý + duyệt giọng từ máy khác trong mạng):</div>
+    <div class="muted" style="font-size:12px;margin:4px 0">Máy xử lý (có card NVIDIA) chạy phần mềm; máy quản trị (vd máy chủ) đăng nhập tài khoản admin qua trình duyệt là quản lý, duyệt, thêm/xóa giọng như ngồi tại máy xử lý. Chỉ sửa được danh sách này khi ngồi TẠI máy xử lý.</div>
+    <div class="formrow">
+      <input id="adm_hosts" class="inp" placeholder="IP máy quản trị, vd 192.168.1.20 (nhiều máy: cách nhau dấu phẩy)" style="min-width:320px">
+      <button class="btn" id="adm_hosts_save">Lưu</button>
+      <span id="adm_hosts_note" class="muted" style="font-size:12px"></span>
+    </div>
   </div>
 
   <!-- GIONG NHAN VIEN GUI LEN - CHO DUYET -->
@@ -1232,6 +1240,37 @@
   setInterval(loadJobs, 2000);
   setInterval(loadGenHistory, 3500);
   setInterval(loadUsers, 6000);
+})();
+</script>
+<script>
+(function () {
+  var inp = document.getElementById('adm_hosts'), btn = document.getElementById('adm_hosts_save'),
+      note = document.getElementById('adm_hosts_note');
+  if (!inp) return;
+  function load() {
+    fetch('/api/me').then(function (r) { return r.json(); }).then(function (me) {
+      inp.value = (me.admin_hosts || []).join(', ');
+      if (me.is_real_host) {
+        inp.disabled = false; btn.disabled = false;
+        note.textContent = 'Đang ngồi tại máy xử lý.';
+      } else {
+        inp.disabled = true; btn.disabled = true;
+        note.textContent = 'IP máy này: ' + (me.your_ip || '?') + (me.is_host
+          ? ' — đang là MÁY QUẢN TRỊ (đủ quyền quản lý, duyệt giọng).'
+          : ' — muốn quản trị từ máy này: nhờ người ở máy xử lý thêm IP này vào danh sách.');
+      }
+    }).catch(function () {});
+  }
+  btn.addEventListener('click', function () {
+    note.textContent = 'Đang lưu…';
+    fetch('/api/admin/admin_hosts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hosts: inp.value })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      note.textContent = j.error ? j.error : 'Đã lưu: ' + ((j.hosts || []).join(', ') || '(không có máy quản trị)');
+    }).catch(function () { note.textContent = 'Lỗi lưu.'; });
+  });
+  load();
 })();
 </script>
 </body>
